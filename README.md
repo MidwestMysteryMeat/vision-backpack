@@ -88,3 +88,8 @@ elsewhere). Everything else runs end-to-end, including fallback paths if
 tagging or gait isn't wired up yet — you can test the full capture →
 anonymize → GPS → queue → desktop → lore → map → SQLite pipeline with
 empty tags and no gait descriptors before either model exists.
+
+## License
+
+Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) — see
+`LICENSE`. Copyright (C) 2026 MidwestMysteryMeat.
