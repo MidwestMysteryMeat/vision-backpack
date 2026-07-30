@@ -1,0 +1,129 @@
+"""
+lore_generator.py
+
+Takes a batch of raw tagged records (object tags + GPS, produced in the
+field) and calls an LLM to turn them into structured NPCs, location
+fixtures, and lore fragments -- matching the schema the existing MMO
+world-database pipeline already expects.
+
+Supports two backends, configurable in config.yaml:
+    - r720: local llama.cpp server (llama-server) running on the R720,
+      talked to over its OpenAI-compatible /v1/chat/completions endpoint
+    - ollama: local inference via Ollama (fallback / alternative)
+"""
+
+import json
+from typing import List, Dict
+from schema import NPCRecord, LocationFixture, LoreFragment
+
+PROMPT_TEMPLATE = """You are helping generate fantasy MMO world content from
+real-world location tags collected on a walk. You will be given a list of
+object tags (already translated to fantasy equivalents) observed at a single
+location cluster, plus optional movement/gait impressions of people
+encountered there. Generate a JSON object with this exact structure:
+
+{{
+  "zone_name": "<evocative fantasy name for this location>",
+  "npcs": [{{"name": "...", "role": "...", "description": "..."}}],
+  "fixtures": [{{"name": "...", "fixture_type": "...", "description": "..."}}],
+  "lore": [{{"title": "...", "text": "..."}}]
+}}
+
+Keep NPC count to 0-2 and fixtures to 1-3 per cluster -- this feeds a living
+world system where density should build up gradually over many walks, not
+all at once. If gait impressions are provided, use them as loose character
+flavor for NPCs (posture, gait, bearing) rather than literal descriptions --
+these are impressions of movement style only, not descriptions of any real
+individual.
+
+Fantasy tags observed at this location:
+{tags}
+
+Gait/movement impressions observed at this location (flavor only):
+{gait}
+
+Respond with ONLY the JSON object, no other text.
+"""
+
+
+class LoreGenerator:
+    def __init__(self, provider: str, r720_cfg: dict = None, ollama_cfg: dict = None):
+        self.provider = provider
+        self.r720_cfg = r720_cfg or {}
+        self.ollama_cfg = ollama_cfg or {}
+
+    def _call_r720(self, prompt: str) -> str:
+        """
+        Talks to llama-server's OpenAI-compatible /v1/chat/completions
+        endpoint on the R720. No API key needed -- it's a LAN call.
+        Start the server on the R720 with something like:
+            llama-server -m qwen2.5-14b-instruct.gguf --host 0.0.0.0 --port 8080 -ngl 99
+        (adjust -ngl / model path to whatever you're already running for
+        the Qwen inference setup.)
+        """
+        import requests
+        host = self.r720_cfg.get("host", "http://localhost:8080")
+        timeout = self.r720_cfg.get("timeout_s", 120)
+        resp = requests.post(
+            f"{host}/v1/chat/completions",
+            json={
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.8,
+                "max_tokens": 1000,
+            },
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
+
+    def _call_ollama(self, prompt: str) -> str:
+        import requests
+        resp = requests.post(
+            f"{self.ollama_cfg.get('host', 'http://localhost:11434')}/api/generate",
+            json={"model": self.ollama_cfg.get("model", "mistral:7b"),
+                  "prompt": prompt, "stream": False},
+        )
+        resp.raise_for_status()
+        return resp.json()["response"]
+
+    def generate_for_cluster(self, fantasy_tags: List[str], zone_id: str,
+                              center_lat: float, center_lon: float,
+                              source_timestamps: List[float],
+                              gait_descriptors: List[str] = None) -> tuple:
+        """Returns (zone_name, npcs, fixtures, lore) for one location cluster."""
+        gait_descriptors = gait_descriptors or []
+        prompt = PROMPT_TEMPLATE.format(
+            tags=", ".join(sorted(set(fantasy_tags))),
+            gait=", ".join(sorted(set(gait_descriptors))) if gait_descriptors else "none observed",
+        )
+
+        if self.provider == "r720":
+            raw = self._call_r720(prompt)
+        elif self.provider == "ollama":
+            raw = self._call_ollama(prompt)
+        else:
+            raise ValueError(f"Unknown provider: {self.provider}")
+
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            # Model didn't return clean JSON -- fail soft with an empty result
+            # rather than crashing the whole batch.
+            print(f"[LoreGenerator] Failed to parse LLM output for zone {zone_id}, skipping.")
+            return (f"Unnamed Zone {zone_id}", [], [], [])
+
+        npcs = [NPCRecord(name=n["name"], role=n["role"], description=n["description"],
+                           source_fantasy_tags=fantasy_tags,
+                           source_gait_traits=gait_descriptors, zone_id=zone_id)
+                for n in parsed.get("npcs", [])]
+
+        fixtures = [LocationFixture(name=f["name"], fixture_type=f["fixture_type"],
+                                     description=f["description"],
+                                     gps_lat=center_lat, gps_lon=center_lon, zone_id=zone_id)
+                    for f in parsed.get("fixtures", [])]
+
+        lore = [LoreFragment(title=l["title"], text=l["text"], related_zone_id=zone_id,
+                              source_record_timestamps=source_timestamps)
+                for l in parsed.get("lore", [])]
+
+        return (parsed.get("zone_name", f"Unnamed Zone {zone_id}"), npcs, fixtures, lore)

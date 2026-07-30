@@ -1,0 +1,48 @@
+# RPG Vision Backpack - Field Unit Configuration
+# Runs on the Pi Zero W / Zero 2 W worn device.
+
+capture:
+  interval_seconds: 45          # periodic auto-capture interval
+  manual_button_gpio: 17        # GPIO pin for manual "capture this" button
+  status_led_gpio: 27
+  resolution: [1280, 960]       # Pi 5 has headroom for a bit more than the Zero-class default
+
+camera:
+  device_index: 0
+  use_ir_illuminator: false     # daytime-focused by default; enable for night hikes
+
+microphone:
+  enabled: false                # ambient audio tagging, off by default -- see privacy checklist
+  sample_seconds: 5
+
+gps:
+  serial_port: "/dev/serial0"
+  baud_rate: 9600
+  fix_timeout_s: 10             # skip GPS tag if no fix within this window
+
+anonymization:
+  face_cascade_path: "models/haarcascade_frontalface_default.xml"
+  overlay_style: "procedural_mask"   # never store or transmit the raw face region
+  min_face_size_px: 30
+
+object_tagging:
+  model_path: "models/mobilenet_ssd_coco.tflite"
+  confidence_threshold: 0.5
+  fantasy_map_path: "fantasy_object_map.yaml"
+
+gait:
+  enabled: true                 # requires the Pi 5 -- not supported on Zero-class builds
+  model_path: "models/movenet_lightning.tflite"
+  burst_frame_count: 15         # ~1-2 seconds at capture time
+  confidence_threshold: 0.3
+  # Only a text label is ever written to disk -- see gait_estimator.py
+  # and SPEC_SHEET.md section 7 for why raw pose data is never persisted.
+
+storage:
+  local_buffer_dir: "/home/pi/vision_backpack_buffer/"
+  external_drive_mount: "/mnt/vb_drive/"
+  queue_subdir: "queue/"
+  flush_to_drive_on_capture: true   # write straight to drive if mounted, else buffer locally
+
+power:
+  low_battery_shutdown_pct: 10  # if battery monitoring HAT is present

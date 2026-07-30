@@ -1,0 +1,30 @@
+# RPG Vision Backpack - Desktop Processing Configuration
+# Runs on the home desktop, ingesting the field unit's external drive.
+
+input:
+  drive_queue_dir: "/mnt/vb_drive/queue/"
+  processed_dir: "/mnt/vb_drive/processed/"   # records get moved here after processing
+
+llm:
+  provider: "r720"               # "r720" (local llama.cpp server) or "ollama"
+  r720:
+    host: "http://192.168.1.X:8080"   # llama-server endpoint on the R720 -- set to its actual LAN IP
+    model: "qwen"                      # informational only; llama-server serves whatever model it was launched with
+    timeout_s: 120
+  ollama:
+    host: "http://localhost:11434"
+    model: "mistral:7b"
+
+lore_generation:
+  batch_size: 10                 # cluster this many nearby records per LLM call
+  output_dir: "output/lore/"
+
+map_builder:
+  cluster_radius_meters: 150     # records within this radius get grouped into one zone
+  output_dir: "output/maps/"
+  map_image_size: [1600, 1200]
+
+mmo_export:
+  # Matches the existing MMO world-database schema (SQLite, quest hooks,
+  # location fixtures) from the prior world-building pipeline work.
+  sqlite_db_path: "output/world_export.db"
