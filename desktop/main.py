@@ -99,7 +99,7 @@ def run(config_path: str = "config.yaml", move_processed: bool = True):
     llm_cfg = cfg["llm"]
     generator = LoreGenerator(
         provider=llm_cfg["provider"],
-        r720_cfg=llm_cfg.get("r720"),
+        local_llama_server_cfg=llm_cfg.get("local_llama_server"),
         ollama_cfg=llm_cfg.get("ollama"),
     )
 

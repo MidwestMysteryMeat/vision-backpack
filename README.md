@@ -55,10 +55,11 @@ pip install -r ../requirements-desktop.txt
 Plug in the field unit's external drive, confirm `input.drive_queue_dir`
 in `desktop/config.yaml` points at its mounted `queue/` folder.
 
-Set `llm.provider` to `r720` (talks to `llama-server` running on the R720
-over the LAN, no API key needed — set `llm.r720.host` to the R720's actual
-IP) or `ollama` (requires a local Ollama server running the configured
-model). For the R720 path, start `llama-server` there first:
+Set `llm.provider` to `local_llama_server` (talks to `llama-server` running
+on any self-hosted machine over the LAN, no API key needed — set
+`llm.local_llama_server.host` to that machine's actual IP) or `ollama`
+(requires a local Ollama server running the configured model). For the
+local_llama_server path, start `llama-server` there first:
 
 ```bash
 llama-server -m /path/to/qwen-model.gguf --host 0.0.0.0 --port 8080 -ngl 99
@@ -92,4 +93,5 @@ empty tags and no gait descriptors before either model exists.
 ## License
 
 Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) — see
-`LICENSE`. Copyright (C) 2026 MidwestMysteryMeat.
+`LICENSE`. Copyright (C) 2026 MidwestMysteryMeat. See `NOTICE` for
+attribution requirements and the network-use clause.

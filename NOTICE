@@ -1,0 +1,31 @@
+RPG Vision Backpack
+Copyright 2026 MysteryMeat (github.com/MidwestMysteryMeat)
+
+Licensed under the GNU Affero General Public License, Version 3 (AGPL-3.0).
+See LICENSE for the full terms.
+
+ATTRIBUTION
+-----------
+If you use, modify or build on this project, credit it as
+
+    RPG Vision Backpack by MysteryMeat
+    https://github.com/MidwestMysteryMeat/vision-backpack
+
+somewhere the people using your version can actually see it -- your
+documentation, README, or an about/credits section.
+
+NETWORK USE IS DISTRIBUTION
+----------------------------
+This is the AGPL's distinguishing requirement (section 13): if you run a
+modified version of this software and let other users interact with it
+remotely over a network (for example, a hosted version of the desktop
+lore-generation step), you must offer those users the corresponding
+source of your modified version. This applies even if you never
+distribute a copy of the software itself. Merely running an unmodified
+copy privately does not trigger this.
+
+THIRD-PARTY COMPONENTS
+-----------------------
+Third-party libraries and models referenced by this repository (OpenCV,
+ultralytics/YOLOv8, MoveNet, etc.) remain under their own licenses and
+are not relicensed by this file or by LICENSE.

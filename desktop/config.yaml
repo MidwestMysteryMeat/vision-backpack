@@ -6,9 +6,9 @@ input:
   processed_dir: "/mnt/vb_drive/processed/"   # records get moved here after processing
 
 llm:
-  provider: "r720"               # "r720" (local llama.cpp server) or "ollama"
-  r720:
-    host: "http://192.168.1.X:8080"   # llama-server endpoint on the R720 -- set to its actual LAN IP
+  provider: "local_llama_server"   # "local_llama_server" (self-hosted llama.cpp server) or "ollama"
+  local_llama_server:
+    host: "http://192.168.1.X:8080"   # llama-server endpoint on whatever machine runs it -- set to its actual LAN IP
     model: "qwen"                      # informational only; llama-server serves whatever model it was launched with
     timeout_s: 120
   ollama:
@@ -26,5 +26,5 @@ map_builder:
 
 mmo_export:
   # Matches the existing MMO world-database schema (SQLite, quest hooks,
-  # location fixtures) from the prior world-building pipeline work.
+  # location fixtures) from prior world-building pipeline work.
   sqlite_db_path: "output/world_export.db"

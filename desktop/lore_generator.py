@@ -7,8 +7,9 @@ fixtures, and lore fragments -- matching the schema the existing MMO
 world-database pipeline already expects.
 
 Supports two backends, configurable in config.yaml:
-    - r720: local llama.cpp server (llama-server) running on the R720,
-      talked to over its OpenAI-compatible /v1/chat/completions endpoint
+    - local_llama_server: a self-hosted llama.cpp server (llama-server)
+      running on any machine on your LAN, talked to over its
+      OpenAI-compatible /v1/chat/completions endpoint
     - ollama: local inference via Ollama (fallback / alternative)
 """
 
@@ -47,23 +48,22 @@ Respond with ONLY the JSON object, no other text.
 
 
 class LoreGenerator:
-    def __init__(self, provider: str, r720_cfg: dict = None, ollama_cfg: dict = None):
+    def __init__(self, provider: str, local_llama_server_cfg: dict = None, ollama_cfg: dict = None):
         self.provider = provider
-        self.r720_cfg = r720_cfg or {}
+        self.local_llama_server_cfg = local_llama_server_cfg or {}
         self.ollama_cfg = ollama_cfg or {}
 
-    def _call_r720(self, prompt: str) -> str:
+    def _call_local_llama_server(self, prompt: str) -> str:
         """
         Talks to llama-server's OpenAI-compatible /v1/chat/completions
-        endpoint on the R720. No API key needed -- it's a LAN call.
-        Start the server on the R720 with something like:
+        endpoint on whatever machine you're running it on. No API key
+        needed -- it's a LAN call. Start the server with something like:
             llama-server -m qwen2.5-14b-instruct.gguf --host 0.0.0.0 --port 8080 -ngl 99
-        (adjust -ngl / model path to whatever you're already running for
-        the Qwen inference setup.)
+        (adjust -ngl / model path to whatever you're already running.)
         """
         import requests
-        host = self.r720_cfg.get("host", "http://localhost:8080")
-        timeout = self.r720_cfg.get("timeout_s", 120)
+        host = self.local_llama_server_cfg.get("host", "http://localhost:8080")
+        timeout = self.local_llama_server_cfg.get("timeout_s", 120)
         resp = requests.post(
             f"{host}/v1/chat/completions",
             json={
@@ -97,8 +97,8 @@ class LoreGenerator:
             gait=", ".join(sorted(set(gait_descriptors))) if gait_descriptors else "none observed",
         )
 
-        if self.provider == "r720":
-            raw = self._call_r720(prompt)
+        if self.provider == "local_llama_server":
+            raw = self._call_local_llama_server(prompt)
         elif self.provider == "ollama":
             raw = self._call_ollama(prompt)
         else:

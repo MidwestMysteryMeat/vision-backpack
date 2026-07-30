@@ -15,8 +15,8 @@ MMO content. Two-phase architecture:
   Upgraded from an original Pi Zero W concept specifically to support
   on-device pose estimation for gait; accepted tradeoff is short session
   length (~2-3 hrs) rather than all-day runtime — see §5.
-- **Phase 2 — Desktop processing (home):** The drive gets plugged into the
-  R720 (dual V100, 48GB VRAM), where a local Qwen model via llama-server
+- **Phase 2 — Desktop processing (home):** The drive gets plugged into a
+  local GPU-capable machine, where a local LLM via llama-server (or Ollama)
   turns the raw tagged captures into structured JSON: NPCs, locations, and
   lore fragments that feed directly into the MMO's world database.
 
@@ -133,7 +133,7 @@ vision_backpack/
 | 3. Object tagging | MobileNet-SSD tagging integrated, coarse labels attached to each record | Reasonable tag accuracy on test footage |
 | 4. Gait descriptor | MoveNet pose burst -> text label, keypoints discarded immediately | Manual review confirms no pose/keypoint data ever persists to disk |
 | 5. Queue + drive handoff | Records reliably written to external drive queue format | Desktop can read and parse a full field session |
-| 6. Desktop lore generation | R720/Qwen turns tagged records + gait labels into structured NPC/location JSON | Output matches existing MMO world-database schema |
+| 6. Desktop lore generation | Local LLM turns tagged records + gait labels into structured NPC/location JSON | Output matches existing MMO world-database schema |
 | 7. Map builder | GPS clustering + named zone generation + rendered map | Map visually reflects the real walked route |
 | 8. Field hardening | Battery swap workflow, cooling validation, enclosure weatherproofing, button/LED UX | 2-3 hr field session survives without intervention |
 
