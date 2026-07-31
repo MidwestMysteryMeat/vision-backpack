@@ -2,7 +2,7 @@
 anonymizer.py
 
 On-device, at-capture-time face anonymization. This runs BEFORE any frame
-is written to disk -- the raw face region should never exist as a
+is written to disk. The raw face region should never exist as a
 persisted file, even transiently.
 
 Overlay is procedurally generated (not a reversible blur/pixelation) so
@@ -31,7 +31,7 @@ class FaceAnonymizer:
         """
         Procedurally generates a fantasy-styled mask pattern sized to the
         face region. Seeded off a hash of the region (not the pixel data
-        itself) purely for visual variety run-to-run -- this is NOT a
+        itself) purely for visual variety run-to-run. This is NOT a
         reversible encoding of the face, just a way to avoid every masked
         face looking identical.
         """

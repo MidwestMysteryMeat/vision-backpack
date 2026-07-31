@@ -3,7 +3,7 @@ lore_generator.py
 
 Takes a batch of raw tagged records (object tags + GPS, produced in the
 field) and calls an LLM to turn them into structured NPCs, location
-fixtures, and lore fragments -- matching the schema the existing MMO
+fixtures, and lore fragments, matching the schema the existing MMO
 world-database pipeline already expects.
 
 Supports two backends, configurable in config.yaml:
@@ -30,11 +30,11 @@ encountered there. Generate a JSON object with this exact structure:
   "lore": [{{"title": "...", "text": "..."}}]
 }}
 
-Keep NPC count to 0-2 and fixtures to 1-3 per cluster -- this feeds a living
+Keep NPC count to 0-2 and fixtures to 1-3 per cluster. This feeds a living
 world system where density should build up gradually over many walks, not
 all at once. If gait impressions are provided, use them as loose character
-flavor for NPCs (posture, gait, bearing) rather than literal descriptions --
-these are impressions of movement style only, not descriptions of any real
+flavor for NPCs (posture, gait, bearing) rather than literal descriptions.
+These are impressions of movement style only, not descriptions of any real
 individual.
 
 Fantasy tags observed at this location:
@@ -57,7 +57,8 @@ class LoreGenerator:
         """
         Talks to llama-server's OpenAI-compatible /v1/chat/completions
         endpoint on whatever machine you're running it on. No API key
-        needed -- it's a LAN call. Start the server with something like:
+        is needed since it's a LAN call. Start the server with something
+        like:
             llama-server -m qwen2.5-14b-instruct.gguf --host 0.0.0.0 --port 8080 -ngl 99
         (adjust -ngl / model path to whatever you're already running.)
         """
@@ -107,7 +108,7 @@ class LoreGenerator:
         try:
             parsed = json.loads(raw)
         except json.JSONDecodeError:
-            # Model didn't return clean JSON -- fail soft with an empty result
+            # Model didn't return clean JSON. Fail soft with an empty result
             # rather than crashing the whole batch.
             print(f"[LoreGenerator] Failed to parse LLM output for zone {zone_id}, skipping.")
             return (f"Unnamed Zone {zone_id}", [], [], [])

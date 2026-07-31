@@ -1,5 +1,5 @@
 # RPG Vision Backpack - Field Unit Configuration
-# Runs on the Pi Zero W / Zero 2 W worn device.
+# Runs on the Pi 5 (16GB) worn device.
 
 capture:
   interval_seconds: 45          # periodic auto-capture interval
@@ -12,7 +12,7 @@ camera:
   use_ir_illuminator: false     # daytime-focused by default; enable for night hikes
 
 microphone:
-  enabled: false                # ambient audio tagging, off by default -- see privacy checklist
+  enabled: false                # ambient audio tagging, off by default; see privacy checklist
   sample_seconds: 5
 
 gps:
@@ -31,11 +31,11 @@ object_tagging:
   fantasy_map_path: "fantasy_object_map.yaml"
 
 gait:
-  enabled: true                 # requires the Pi 5 -- not supported on Zero-class builds
+  enabled: true                 # requires the Pi 5; not supported on Zero-class builds
   model_path: "models/movenet_lightning.tflite"
   burst_frame_count: 15         # ~1-2 seconds at capture time
   confidence_threshold: 0.3
-  # Only a text label is ever written to disk -- see gait_estimator.py
+  # Only a text label is ever written to disk. See gait_estimator.py
   # and SPEC_SHEET.md section 7 for why raw pose data is never persisted.
 
 storage:

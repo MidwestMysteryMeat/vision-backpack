@@ -124,7 +124,7 @@ def run(config_path: str = "config.yaml", move_processed: bool = True):
         zone_render_data[zone_id] = {"name": zone_name, "center_lat": center_lat,
                                        "center_lon": center_lon}
 
-        print(f"[main] Zone {zone_id}: '{zone_name}' -- "
+        print(f"[main] Zone {zone_id}: '{zone_name}', "
               f"{len(npcs)} NPCs, {len(fixtures)} fixtures, {len(lore)} lore fragments")
 
     # Write raw JSON output

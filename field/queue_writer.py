@@ -1,7 +1,7 @@
 """
 queue_writer.py
 
-Writes each capture record to the queue -- either directly to the external
+Writes each capture record to the queue, either directly to the external
 drive if mounted, or to a local buffer that gets flushed once the drive is
 available. Records are the unit of work the desktop-side pipeline consumes.
 
@@ -12,10 +12,10 @@ Record format (one JSON file + one image file per capture):
             "gps_lat": <float|null>,
             "gps_lon": <float|null>,
             "object_tags": [{"real_label": ..., "fantasy_label": ..., "confidence": ...}, ...],
-            "gait_descriptor": <string|null>,   # text label only -- see gait_estimator.py
+            "gait_descriptor": <string|null>,   # text label only, see gait_estimator.py
             "image_path": "{timestamp}.jpg"
         }
-    {timestamp}.jpg: the ANONYMIZED frame only -- never the raw capture.
+    {timestamp}.jpg: the ANONYMIZED frame only, never the raw capture.
 """
 
 import os

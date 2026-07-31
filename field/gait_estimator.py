@@ -2,14 +2,14 @@
 gait_estimator.py
 
 Produces a short, human-readable gait descriptor ("brisk and rigid",
-"slow, shuffling gait") from a burst of frames -- and nothing else.
+"slow, shuffling gait") from a burst of frames, and nothing else.
 
 CRITICAL PRIVACY PROPERTY: this module never returns and never persists
 raw keypoints, pose vectors, or anything that could be compared against a
 future capture to re-identify the same person. The burst frames and all
 intermediate pose data exist only for the duration of describe_burst() and
 are discarded when it returns. Only the resulting text label leaves this
-module. Do not modify this module to return or cache keypoint data -- that
+module. Do not modify this module to return or cache keypoint data: that
 would turn an ephemeral descriptor into a biometric signature, which is
 explicitly out of scope for this project (see SPEC_SHEET.md section 7).
 """
@@ -28,7 +28,7 @@ KP_LEFT_SHOULDER, KP_RIGHT_SHOULDER = 5, 6
 
 @dataclass
 class _FrameKeypoints:
-    """Internal only -- never returned from this module, never persisted."""
+    """Internal only. Never returned from this module, never persisted."""
     keypoints: np.ndarray  # shape (17, 3): x, y, confidence
     timestamp: float
 
@@ -47,13 +47,13 @@ class GaitEstimator:
 
     def _run_pose_model(self, frame: np.ndarray) -> Optional[np.ndarray]:
         """Returns raw keypoints for a single frame, or None. Internal use
-        only within this module's burst analysis -- never exposed outside it."""
+        only within this module's burst analysis; never exposed outside it."""
         if self.model is None:
             return None
 
         # Actual MoveNet inference wiring goes here: resize to model input
         # size, run inference, extract the (17, 3) keypoint output.
-        # Left as an integration point -- exact pre/post-processing depends
+        # Left as an integration point; exact pre/post-processing depends
         # on the specific MoveNet Lightning export used.
         raise NotImplementedError(
             "Wire up MoveNet Lightning tflite inference here. Input: "
@@ -63,7 +63,7 @@ class GaitEstimator:
     def _describe(self, avg_speed: float, stride_variance: float,
                   avg_torso_angle: float) -> str:
         """Maps coarse numeric metrics to a text label. Thresholds are
-        rough starting points -- tune against real captures."""
+        rough starting points; tune against real captures."""
         speed_word = "brisk" if avg_speed > 0.15 else (
             "slow" if avg_speed < 0.05 else "steady")
         regularity_word = "rigid" if stride_variance < 0.02 else (
@@ -74,7 +74,7 @@ class GaitEstimator:
 
     def describe_burst(self, frames: List[np.ndarray]) -> Optional[str]:
         """
-        Takes a burst of frames (already captured, already in memory --
+        Takes a burst of frames (already captured, already in memory;
         this function does not itself touch the camera), runs pose
         estimation across them, derives a text descriptor, and returns
         ONLY that string. All keypoint data used along the way is local
@@ -131,6 +131,6 @@ class GaitEstimator:
         descriptor = self._describe(avg_speed, stride_variance, avg_torso_angle)
 
         # frame_kps and all local arrays go out of scope and are garbage
-        # collected here -- nothing from this function is retained beyond
+        # collected here. Nothing from this function is retained beyond
         # the returned string.
         return descriptor

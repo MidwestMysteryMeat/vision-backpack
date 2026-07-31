@@ -1,7 +1,7 @@
 """
 main.py (field)
 
-Runs on the worn Pi Zero W. Orchestrates the capture loop:
+Runs on the worn Pi 5. Orchestrates the capture loop:
 
     every N seconds (or on button press):
         grab frame
@@ -10,7 +10,7 @@ Runs on the worn Pi Zero W. Orchestrates the capture loop:
         get GPS fix (best-effort, non-blocking beyond timeout)
         write record to queue
 
-Kept deliberately simple and low-compute -- all the heavy lifting
+Kept simple and low-compute on purpose: all the heavy lifting
 (lore generation, mapping) happens later on the desktop side.
 """
 
@@ -23,7 +23,7 @@ try:
     HAS_GPIO = True
 except ImportError:
     HAS_GPIO = False
-    print("[main] RPi.GPIO not available -- running in desktop simulation mode "
+    print("[main] RPi.GPIO not available, running in desktop simulation mode "
           "(no button/LED support).")
 
 from anonymizer import FaceAnonymizer
@@ -115,7 +115,7 @@ def run(config_path: str = "config.yaml"):
                     continue
 
                 anonymized = anonymizer.anonymize(frame)
-                object_tags = object_mapper.tag_frame(frame)  # tag original, not the masked copy
+                object_tags = object_mapper.tag_frame(frame)  # tags the original, not the masked copy
                 lat, lon = gps.get_fix()
 
                 gait_descriptor = None
@@ -123,7 +123,7 @@ def run(config_path: str = "config.yaml"):
                         t.real_label == "person" for t in object_tags):
                     # Only spend the extra burst/inference cost when a
                     # person is actually in frame. Burst frames live only
-                    # in this local list -- discarded once describe_burst()
+                    # in this local list, discarded once describe_burst()
                     # returns, per the ephemeral-descriptor design.
                     burst = []
                     for _ in range(gait_cfg.get("burst_frame_count", 15)):
@@ -131,7 +131,7 @@ def run(config_path: str = "config.yaml"):
                         if ok:
                             burst.append(burst_frame)
                     gait_descriptor = gait_estimator.describe_burst(burst)
-                    del burst  # explicit -- nothing from the burst survives this scope
+                    del burst  # explicit: nothing from the burst survives this scope
 
                 queue.write_record(anonymized, lat, lon, object_tags, gait_descriptor)
                 blink_led(led_pin, times=1)

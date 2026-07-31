@@ -5,8 +5,8 @@ Clusters GPS-tagged records into named zones based on physical proximity,
 then renders a simple 2D map preserving the real walked route's geography
 translated into fantasy zone markers.
 
-Uses simple distance-based clustering rather than a full DBSCAN dependency
--- good enough at the scale of "one person's walking route," and keeps the
+Uses simple distance-based clustering rather than a full DBSCAN dependency.
+Good enough at the scale of "one person's walking route," and it keeps the
 desktop-side dependency list light.
 """
 
@@ -69,7 +69,7 @@ def render_map(zones: Dict[str, dict], image_size: tuple, output_path: str):
     """
     Renders a simple top-down map: zone centroids plotted proportionally
     to their real GPS spread, labeled with fantasy zone names. This is a
-    minimal renderer -- swap in a proper projection/tile system later if
+    minimal renderer. Swap in a proper projection/tile system later if
     the walked area gets large enough that flat scaling distorts things.
     """
     if not zones:

@@ -8,7 +8,7 @@ input:
 llm:
   provider: "local_llama_server"   # "local_llama_server" (self-hosted llama.cpp server) or "ollama"
   local_llama_server:
-    host: "http://192.168.1.X:8080"   # llama-server endpoint on whatever machine runs it -- set to its actual LAN IP
+    host: "http://192.168.1.X:8080"   # llama-server endpoint on whatever machine runs it; set to its actual LAN IP
     model: "qwen"                      # informational only; llama-server serves whatever model it was launched with
     timeout_s: 120
   ollama:

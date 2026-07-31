@@ -3,7 +3,7 @@ gps_logger.py
 
 Thin wrapper around a NEO-6M GPS module over serial/UART, parsing NMEA
 sentences for a lat/lon fix. Returns None if no fix is available within
-the configured timeout -- capture should proceed and log without GPS
+the configured timeout: capture should proceed and log without GPS
 rather than blocking indefinitely.
 """
 

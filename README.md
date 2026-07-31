@@ -28,19 +28,19 @@ python main.py
 Runs continuously: auto-captures every `capture.interval_seconds`, or on
 button press (GPIO pin set in config). Ctrl+C to stop.
 
-**Session length:** this is a short-session build (~2-3 hrs on a
-20,000mAh bank) — see `SPEC_SHEET.md` §5 for the power tradeoff behind
-going with the Pi 5 over the original Zero W concept. Bring spare battery
-banks for longer outings.
+**Session length:** this is a short-session build (roughly 2-3 hrs on a
+20,000mAh bank). See `SPEC_SHEET.md` §5 for the power tradeoff behind
+going with the Pi 5 over the original Pi Zero W concept. Bring spare
+battery banks for longer outings.
 
 **Gait descriptors:** when `gait.enabled` is true in config and a person
 is detected in frame, a short burst of frames is analyzed on-device to
 produce a text descriptor (e.g. "brisk, rigid stride"). This is
-deliberately ephemeral — see `gait_estimator.py`'s module docstring and
+ephemeral by design. See `gait_estimator.py`'s module docstring and
 `SPEC_SHEET.md` §7 for why raw pose/keypoint data is never persisted or
 matched between captures. Only the text label reaches the queue.
 
-**Before field use:** verify anonymization is working correctly — capture
+**Before field use:** verify anonymization is working correctly. Capture
 a test frame with a face in it and confirm the output has a procedural
 overlay, not the raw face. Do this every time you change camera hardware
 or anonymizer settings, not just once.
@@ -55,8 +55,8 @@ pip install -r ../requirements-desktop.txt
 Plug in the field unit's external drive, confirm `input.drive_queue_dir`
 in `desktop/config.yaml` points at its mounted `queue/` folder.
 
-Set `llm.provider` to `local_llama_server` (talks to `llama-server` running
-on any self-hosted machine over the LAN, no API key needed — set
+Set `llm.provider` to `local_llama_server` (talks to `llama-server`
+running on any self-hosted machine over the LAN, no API key needed; set
 `llm.local_llama_server.host` to that machine's actual IP) or `ollama`
 (requires a local Ollama server running the configured model). For the
 local_llama_server path, start `llama-server` there first:
@@ -73,8 +73,8 @@ This clusters the session's GPS-tagged records into zones, generates
 NPCs/fixtures/lore per zone via the configured LLM, renders a fantasy map
 of the walked route, and exports everything into a SQLite database
 matching the existing MMO world-database schema (zones, NPCs, fixtures,
-lore — pairs with the quest hook and location fixture systems from the
-prior world-building pipeline work).
+lore; pairs with the quest hook and location fixture systems from prior
+world-building pipeline work).
 
 Processed records get moved out of the drive's active queue automatically
 unless you pass `--keep-queue`.
@@ -82,16 +82,16 @@ unless you pass `--keep-queue`.
 ## Project status
 
 Pre-prototype. `object_mapper.py`'s TFLite inference call is a stub, and
-so is `gait_estimator.py`'s `_run_pose_model()` — wire both up once the
+so is `gait_estimator.py`'s `_run_pose_model()`. Wire both up once the
 respective models are exported (see the wildlife camera project's
 `camera_detector.py` for the same inference pattern already working
 elsewhere). Everything else runs end-to-end, including fallback paths if
-tagging or gait isn't wired up yet — you can test the full capture →
-anonymize → GPS → queue → desktop → lore → map → SQLite pipeline with
-empty tags and no gait descriptors before either model exists.
+tagging or gait isn't wired up yet: you can test the full capture,
+anonymize, GPS, queue, desktop, lore, map, SQLite pipeline with empty
+tags and no gait descriptors before either model exists.
 
 ## License
 
-Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) — see
+Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). See
 `LICENSE`. Copyright (C) 2026 MidwestMysteryMeat. See `NOTICE` for
 attribution requirements and the network-use clause.
