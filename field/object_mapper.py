@@ -64,6 +64,7 @@ class ObjectMapper:
         self.confidence_threshold = confidence_threshold
         self.fantasy_map = load_fantasy_map(fantasy_map_path)
         self.model = None
+        self._warned_not_implemented = False
         try:
             import tflite_runtime.interpreter as tflite
             self.model = tflite.Interpreter(model_path=model_path)
@@ -87,9 +88,13 @@ class ObjectMapper:
         # Actual TFLite inference wiring goes here: input tensor prep,
         # invoke(), output tensor parsing. Left as an integration point
         # since exact pre/post-processing depends on the specific
-        # MobileNet-SSD export used.
-        raise NotImplementedError(
-            "Wire up TFLite inference here once a model is exported. "
-            "See the wildlife camera project's camera_detector.py for the "
-            "same MobileNet-SSD inference pattern already in use."
-        )
+        # MobileNet-SSD export used. Until then, fail soft: a downloaded
+        # model must not turn the first capture into a crash.
+        if not self._warned_not_implemented:
+            self._warned_not_implemented = True
+            print("[ObjectMapper] Inference not implemented yet: a model file "
+                  "is loaded, but the TFLite pre/post-processing has not been "
+                  "wired up (see the wildlife camera project's "
+                  "camera_detector.py for the same MobileNet-SSD pattern). "
+                  "Returning empty object_tags for every frame until then.")
+        return []

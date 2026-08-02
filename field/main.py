@@ -92,8 +92,10 @@ def run(config_path: str = "config.yaml"):
     )
 
     cap = cv2.VideoCapture(cfg["camera"]["device_index"])
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg["camera"]["resolution"][0])
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg["camera"]["resolution"][1])
+    # resolution lives under capture: in the shipped config.yaml
+    resolution = cfg["capture"]["resolution"]
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, resolution[0])
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, resolution[1])
 
     if not cap.isOpened():
         raise RuntimeError("Could not open camera device.")

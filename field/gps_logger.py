@@ -27,6 +27,14 @@ class GPSLogger:
         if self._ser is None:
             return (None, None)
 
+        # The module streams NMEA continuously between captures, so the OS
+        # buffer holds sentences that are many seconds old. Drop them and
+        # read fresh so the fix reflects where we are now, not where we were.
+        try:
+            self._ser.reset_input_buffer()
+        except Exception:
+            pass
+
         start = time.monotonic()
         while (time.monotonic() - start) < self.fix_timeout_s:
             try:

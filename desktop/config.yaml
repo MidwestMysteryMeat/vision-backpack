@@ -4,6 +4,7 @@
 input:
   drive_queue_dir: "/mnt/vb_drive/queue/"
   processed_dir: "/mnt/vb_drive/processed/"   # records get moved here after processing
+  no_gps_dir: "/mnt/vb_drive/unprocessed_no_gps/"   # records with no GPS fix land here instead
 
 llm:
   provider: "local_llama_server"   # "local_llama_server" (self-hosted llama.cpp server) or "ollama"

@@ -113,18 +113,41 @@ class LoreGenerator:
             print(f"[LoreGenerator] Failed to parse LLM output for zone {zone_id}, skipping.")
             return (f"Unnamed Zone {zone_id}", [], [], [])
 
-        npcs = [NPCRecord(name=n["name"], role=n["role"], description=n["description"],
-                           source_fantasy_tags=fantasy_tags,
-                           source_gait_traits=gait_descriptors, zone_id=zone_id)
-                for n in parsed.get("npcs", [])]
+        if not isinstance(parsed, dict):
+            print(f"[LoreGenerator] LLM output for zone {zone_id} is not a JSON object, skipping.")
+            return (f"Unnamed Zone {zone_id}", [], [], [])
 
-        fixtures = [LocationFixture(name=f["name"], fixture_type=f["fixture_type"],
-                                     description=f["description"],
-                                     gps_lat=center_lat, gps_lon=center_lon, zone_id=zone_id)
-                    for f in parsed.get("fixtures", [])]
+        # Valid JSON can still be missing fields or have the wrong shape
+        # (routine from small local models). Fail soft per item: drop the
+        # malformed entry, keep the rest of the zone and the batch.
+        npcs, fixtures, lore = [], [], []
+        for n in parsed.get("npcs", []) or []:
+            try:
+                npcs.append(NPCRecord(name=n["name"], role=n["role"],
+                                      description=n["description"],
+                                      source_fantasy_tags=fantasy_tags,
+                                      source_gait_traits=gait_descriptors,
+                                      zone_id=zone_id))
+            except (KeyError, TypeError) as e:
+                print(f"[LoreGenerator] Skipping malformed NPC entry in zone {zone_id}: {e}")
 
-        lore = [LoreFragment(title=l["title"], text=l["text"], related_zone_id=zone_id,
-                              source_record_timestamps=source_timestamps)
-                for l in parsed.get("lore", [])]
+        for f in parsed.get("fixtures", []) or []:
+            try:
+                fixtures.append(LocationFixture(name=f["name"],
+                                                fixture_type=f["fixture_type"],
+                                                description=f["description"],
+                                                gps_lat=center_lat, gps_lon=center_lon,
+                                                zone_id=zone_id))
+            except (KeyError, TypeError) as e:
+                print(f"[LoreGenerator] Skipping malformed fixture entry in zone {zone_id}: {e}")
 
-        return (parsed.get("zone_name", f"Unnamed Zone {zone_id}"), npcs, fixtures, lore)
+        for l in parsed.get("lore", []) or []:
+            try:
+                lore.append(LoreFragment(title=l["title"], text=l["text"],
+                                         related_zone_id=zone_id,
+                                         source_record_timestamps=source_timestamps))
+            except (KeyError, TypeError) as e:
+                print(f"[LoreGenerator] Skipping malformed lore entry in zone {zone_id}: {e}")
+
+        zone_name = parsed.get("zone_name") or f"Unnamed Zone {zone_id}"
+        return (zone_name, npcs, fixtures, lore)

@@ -47,6 +47,16 @@ def load_queued_records(queue_dir: str):
     return records
 
 
+def move_record_files(filenames: list, src_dir: str, dest_dir: str):
+    """Moves each record's .json (and companion .jpg, if any) out of src_dir."""
+    for filename in filenames:
+        base = filename.rsplit(".", 1)[0]
+        for ext in (".json", ".jpg"):
+            src = os.path.join(src_dir, base + ext)
+            if os.path.exists(src):
+                os.rename(src, os.path.join(dest_dir, base + ext))
+
+
 def export_to_sqlite(zones: list, db_path: str):
     conn = sqlite3.connect(db_path)
     conn.execute("""CREATE TABLE IF NOT EXISTS zones (
@@ -87,6 +97,30 @@ def run(config_path: str = "config.yaml", move_processed: bool = True):
     filenames_and_records = load_queued_records(queue_dir)
     if not filenames_and_records:
         print("[main] No queued records found. Nothing to process.")
+        return
+
+    # Records without a GPS fix can't be clustered or placed on the map.
+    # Don't quietly shuffle them into processed/ with everything else:
+    # set them aside in their own directory so they stay visible.
+    no_fix = [(f, r) for f, r in filenames_and_records
+              if r.gps_lat is None or r.gps_lon is None]
+    filenames_and_records = [(f, r) for f, r in filenames_and_records
+                             if r.gps_lat is not None and r.gps_lon is not None]
+
+    no_fix_filenames = [f for f, _ in no_fix]
+    if no_fix_filenames:
+        print(f"[main] {len(no_fix_filenames)} record(s) have no GPS fix and "
+              f"cannot be processed: {', '.join(no_fix_filenames)}")
+        if move_processed:
+            no_gps_dir = cfg["input"].get(
+                "no_gps_dir", os.path.join(os.path.dirname(
+                    cfg["input"]["processed_dir"].rstrip("/\\")), "unprocessed_no_gps"))
+            os.makedirs(no_gps_dir, exist_ok=True)
+            move_record_files(no_fix_filenames, queue_dir, no_gps_dir)
+            print(f"[main] Moved them to {no_gps_dir} (not processed/).")
+
+    if not filenames_and_records:
+        print("[main] No records with a GPS fix to process.")
         return
 
     filenames = [f for f, _ in filenames_and_records]
@@ -148,12 +182,7 @@ def run(config_path: str = "config.yaml", move_processed: bool = True):
     if move_processed:
         processed_dir = cfg["input"]["processed_dir"]
         os.makedirs(processed_dir, exist_ok=True)
-        for filename in filenames:
-            base = filename.rsplit(".", 1)[0]
-            for ext in (".json", ".jpg"):
-                src = os.path.join(queue_dir, base + ext)
-                if os.path.exists(src):
-                    os.rename(src, os.path.join(processed_dir, base + ext))
+        move_record_files(filenames, queue_dir, processed_dir)
         print(f"[main] Moved {len(filenames)} record sets to {processed_dir}")
 
 

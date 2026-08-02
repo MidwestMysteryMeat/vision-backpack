@@ -37,6 +37,7 @@ class GaitEstimator:
     def __init__(self, model_path: str, confidence_threshold: float = 0.3):
         self.confidence_threshold = confidence_threshold
         self.model = None
+        self._warned_not_implemented = False
         try:
             import tflite_runtime.interpreter as tflite
             self.model = tflite.Interpreter(model_path=model_path)
@@ -54,11 +55,15 @@ class GaitEstimator:
         # Actual MoveNet inference wiring goes here: resize to model input
         # size, run inference, extract the (17, 3) keypoint output.
         # Left as an integration point; exact pre/post-processing depends
-        # on the specific MoveNet Lightning export used.
-        raise NotImplementedError(
-            "Wire up MoveNet Lightning tflite inference here. Input: "
-            "192x192 RGB frame. Output: (1, 1, 17, 3) keypoint tensor."
-        )
+        # on the specific MoveNet Lightning export used. Until then, fail
+        # soft: a downloaded model must not crash the capture loop.
+        if not self._warned_not_implemented:
+            self._warned_not_implemented = True
+            print("[GaitEstimator] Inference not implemented yet: a pose model "
+                  "is loaded, but the MoveNet Lightning wiring (192x192 RGB in, "
+                  "(1, 1, 17, 3) keypoint tensor out) has not been written. "
+                  "Gait descriptors will be omitted until then.")
+        return None
 
     def _describe(self, avg_speed: float, stride_variance: float,
                   avg_torso_angle: float) -> str:
