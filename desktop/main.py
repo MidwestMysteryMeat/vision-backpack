@@ -27,13 +27,32 @@ def load_config(path: str = "config.yaml") -> dict:
         return yaml.safe_load(f)
 
 
-def load_queued_records(queue_dir: str):
+def load_queued_records(queue_dir: str, quarantine_dir: str = None):
     records = []
     for filename in sorted(os.listdir(queue_dir)):
         if not filename.endswith(".json"):
             continue
-        with open(os.path.join(queue_dir, filename), "r") as f:
-            data = json.load(f)
+        json_path = os.path.join(queue_dir, filename)
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict) or "timestamp" not in data:
+                raise ValueError("record is missing timestamp")
+            if data.get("gps_lat") is not None and not -90 <= float(data["gps_lat"]) <= 90:
+                raise ValueError("invalid latitude")
+            if data.get("gps_lon") is not None and not -180 <= float(data["gps_lon"]) <= 180:
+                raise ValueError("invalid longitude")
+            image_name = data.get("image_path")
+            if not image_name or os.path.basename(image_name) != image_name:
+                raise ValueError("invalid image_path")
+            if not os.path.isfile(os.path.join(queue_dir, image_name)):
+                raise ValueError("companion image is missing")
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            print(f"[main] Quarantining invalid record {filename}: {exc}")
+            if quarantine_dir:
+                os.makedirs(quarantine_dir, exist_ok=True)
+                move_record_files([filename], queue_dir, quarantine_dir)
+            continue
 
         fantasy_tags = [t["fantasy_label"] for t in data.get("object_tags", [])]
         gait_descriptor = data.get("gait_descriptor")
@@ -58,43 +77,46 @@ def move_record_files(filenames: list, src_dir: str, dest_dir: str):
 
 
 def export_to_sqlite(zones: list, db_path: str):
-    conn = sqlite3.connect(db_path)
-    conn.execute("""CREATE TABLE IF NOT EXISTS zones (
+    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("""CREATE TABLE IF NOT EXISTS zones (
         zone_id TEXT PRIMARY KEY, name TEXT, center_lat REAL, center_lon REAL)""")
-    conn.execute("""CREATE TABLE IF NOT EXISTS npcs (
+        conn.execute("""CREATE TABLE IF NOT EXISTS npcs (
         id INTEGER PRIMARY KEY AUTOINCREMENT, zone_id TEXT, name TEXT,
         role TEXT, description TEXT)""")
-    conn.execute("""CREATE TABLE IF NOT EXISTS fixtures (
+        conn.execute("""CREATE TABLE IF NOT EXISTS fixtures (
         id INTEGER PRIMARY KEY AUTOINCREMENT, zone_id TEXT, name TEXT,
         fixture_type TEXT, description TEXT, gps_lat REAL, gps_lon REAL)""")
-    conn.execute("""CREATE TABLE IF NOT EXISTS lore (
+        conn.execute("""CREATE TABLE IF NOT EXISTS lore (
         id INTEGER PRIMARY KEY AUTOINCREMENT, zone_id TEXT, title TEXT, text TEXT)""")
 
-    for zone in zones:
-        conn.execute("INSERT OR REPLACE INTO zones VALUES (?, ?, ?, ?)",
+        for zone in zones:
+            conn.execute("DELETE FROM npcs WHERE zone_id = ?", (zone.zone_id,))
+            conn.execute("DELETE FROM fixtures WHERE zone_id = ?", (zone.zone_id,))
+            conn.execute("DELETE FROM lore WHERE zone_id = ?", (zone.zone_id,))
+            conn.execute("INSERT OR REPLACE INTO zones VALUES (?, ?, ?, ?)",
                       (zone.zone_id, zone.name, zone.center_lat, zone.center_lon))
-        for npc in zone.npcs:
-            conn.execute("INSERT INTO npcs (zone_id, name, role, description) VALUES (?, ?, ?, ?)",
+            for npc in zone.npcs:
+                conn.execute("INSERT INTO npcs (zone_id, name, role, description) VALUES (?, ?, ?, ?)",
                           (zone.zone_id, npc.name, npc.role, npc.description))
-        for fixture in zone.fixtures:
-            conn.execute(
+            for fixture in zone.fixtures:
+                conn.execute(
                 "INSERT INTO fixtures (zone_id, name, fixture_type, description, gps_lat, gps_lon) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
                 (zone.zone_id, fixture.name, fixture.fixture_type, fixture.description,
                  fixture.gps_lat, fixture.gps_lon))
-        for lore_frag in zone.lore:
-            conn.execute("INSERT INTO lore (zone_id, title, text) VALUES (?, ?, ?)",
-                          (zone.zone_id, lore_frag.title, lore_frag.text))
-
-    conn.commit()
-    conn.close()
+            for lore_frag in zone.lore:
+                conn.execute("INSERT INTO lore (zone_id, title, text) VALUES (?, ?, ?)",
+                         (zone.zone_id, lore_frag.title, lore_frag.text))
 
 
 def run(config_path: str = "config.yaml", move_processed: bool = True):
     cfg = load_config(config_path)
 
     queue_dir = cfg["input"]["drive_queue_dir"]
-    filenames_and_records = load_queued_records(queue_dir)
+    quarantine_dir = cfg["input"].get("quarantine_dir",
+                                      os.path.join(cfg["input"]["processed_dir"], "quarantine"))
+    filenames_and_records = load_queued_records(queue_dir, quarantine_dir)
     if not filenames_and_records:
         print("[main] No queued records found. Nothing to process.")
         return

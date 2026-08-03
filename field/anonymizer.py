@@ -17,6 +17,8 @@ import hashlib
 class FaceAnonymizer:
     def __init__(self, cascade_path: str, min_face_size_px: int = 30):
         self.detector = cv2.CascadeClassifier(cascade_path)
+        if self.detector.empty():
+            raise ValueError(f"Face anonymizer model could not be loaded: {cascade_path}")
         self.min_face_size_px = min_face_size_px
 
     def detect_faces(self, frame: np.ndarray) -> list:

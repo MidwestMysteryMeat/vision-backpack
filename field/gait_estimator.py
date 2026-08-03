@@ -15,6 +15,7 @@ explicitly out of scope for this project (see SPEC_SHEET.md section 7).
 """
 
 import time
+import cv2
 import numpy as np
 from dataclasses import dataclass
 from typing import List, Optional
@@ -52,18 +53,27 @@ class GaitEstimator:
         if self.model is None:
             return None
 
-        # Actual MoveNet inference wiring goes here: resize to model input
-        # size, run inference, extract the (17, 3) keypoint output.
-        # Left as an integration point; exact pre/post-processing depends
-        # on the specific MoveNet Lightning export used. Until then, fail
-        # soft: a downloaded model must not crash the capture loop.
-        if not self._warned_not_implemented:
-            self._warned_not_implemented = True
-            print("[GaitEstimator] Inference not implemented yet: a pose model "
-                  "is loaded, but the MoveNet Lightning wiring (192x192 RGB in, "
-                  "(1, 1, 17, 3) keypoint tensor out) has not been written. "
-                  "Gait descriptors will be omitted until then.")
-        return None
+        try:
+            input_detail = self.model.get_input_details()[0]
+            output_detail = self.model.get_output_details()[0]
+            _, height, width, _ = input_detail["shape"]
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            image = cv2.resize(image, (int(width), int(height)))
+            tensor = np.expand_dims(image, axis=0)
+            if input_detail["dtype"] == np.float32:
+                tensor = tensor.astype(np.float32) / 255.0
+            else:
+                tensor = tensor.astype(input_detail["dtype"])
+            self.model.set_tensor(input_detail["index"], tensor)
+            self.model.invoke()
+            output = self.model.get_tensor(output_detail["index"])
+            keypoints = np.asarray(output).reshape(-1, 17, 3)
+            if keypoints.shape[0] != 1:
+                raise ValueError(f"Unexpected MoveNet output shape: {output.shape}")
+            return keypoints[0].astype(np.float32, copy=True)
+        except Exception as exc:
+            print(f"[GaitEstimator] Inference failed; omitting descriptor: {exc}")
+            return None
 
     def _describe(self, avg_speed: float, stride_variance: float,
                   avg_torso_angle: float) -> str:

@@ -79,10 +79,12 @@ class LoreGenerator:
 
     def _call_ollama(self, prompt: str) -> str:
         import requests
+        timeout = self.ollama_cfg.get("timeout_s", 120)
         resp = requests.post(
             f"{self.ollama_cfg.get('host', 'http://localhost:11434')}/api/generate",
             json={"model": self.ollama_cfg.get("model", "mistral:7b"),
                   "prompt": prompt, "stream": False},
+            timeout=timeout,
         )
         resp.raise_for_status()
         return resp.json()["response"]
