@@ -11,11 +11,16 @@ cd field
 pip install -r ../requirements-field.txt --break-system-packages
 ```
 
-Download a Haar cascade face model (`haarcascade_frontalface_default.xml`,
-ships with OpenCV), a MobileNet-SSD COCO TFLite model, and a MoveNet
-Lightning TFLite model into `field/models/` (same model class already
-used in the wildlife camera project's `camera_detector.py` for object
-detection; MoveNet Lightning is the pose model gait descriptors run on).
+Fetch the three model files (Haar cascade for faces, MobileNet-SSD COCO
+for object tagging, MoveNet Lightning for gait pose) into `field/models/`:
+
+```bash
+python fetch_models.py
+```
+
+The cascade is copied from the installed OpenCV package when possible;
+the two TFLite models are downloaded from their published hosting.
+Re-running skips files already present (`--force` to refresh).
 
 Set `storage.external_drive_mount` in `field/config.yaml` to wherever the
 shared 4TB drive mounts on the Pi, and `gps.serial_port` to match your
@@ -87,14 +92,25 @@ unless you pass `--keep-queue`.
 
 ## Project status
 
-Pre-prototype. `object_mapper.py`'s TFLite inference call is a stub, and
-so is `gait_estimator.py`'s `_run_pose_model()`. Wire both up once the
-respective models are exported (see the wildlife camera project's
-`camera_detector.py` for the same inference pattern already working
-elsewhere). Everything else runs end-to-end, including fallback paths if
-tagging or gait isn't wired up yet: you can test the full capture,
-anonymize, GPS, queue, desktop, lore, map, SQLite pipeline with empty
-tags and no gait descriptors before either model exists.
+Pre-prototype, but the software pipeline is complete: object tagging,
+gait pose, and face detection have all been validated against the real
+model files fetched by `fetch_models.py` (person/chair/ball detection,
+gait descriptor generation, and face masking confirmed on test imagery).
+TFLite inference falls back from `tflite_runtime` (the Pi target) to
+`ai-edge-litert` or full TensorFlow, so the field code can be exercised
+on a desktop too. Fallback paths still hold if a model file is missing:
+capture, anonymize, GPS, queue, desktop, lore, map, and SQLite export
+all run with empty tags and no gait descriptors.
+
+What's left is hardware: Pi bring-up (camera, GPS wiring, drive mount),
+the on-camera anonymization verification described above, gait threshold
+tuning on real captures, and SPEC_SHEET §4 phase 8 field hardening.
+
+Run the test suite from the repo root:
+
+```bash
+python -m unittest discover -s tests
+```
 
 ## License
 

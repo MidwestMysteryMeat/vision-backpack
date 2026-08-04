@@ -18,12 +18,15 @@ Record format (one JSON file + one image file per capture):
     {timestamp}.jpg: the ANONYMIZED frame only, never the raw capture.
 """
 
+import logging
 import os
 import json
 import shutil
 import time
 import uuid
 import cv2
+
+logger = logging.getLogger("vb.queue")
 
 
 def _move_across_filesystems(src: str, dest: str):
@@ -145,5 +148,5 @@ class QueueWriter:
                     raise
                 moved += 1
             except OSError as e:
-                print(f"[QueueWriter] Could not flush record {record_id}: {e}")
+                logger.warning("Could not flush record %s: %s", record_id, e)
         return moved

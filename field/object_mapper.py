@@ -11,11 +11,32 @@ scene understanding. The heavy lore-writing work happens later on the
 desktop with a real LLM.
 """
 
+import logging
 import cv2
 import numpy as np
 import yaml
 from dataclasses import dataclass
 from typing import List
+
+logger = logging.getLogger("vb.objects")
+
+
+def load_tflite_interpreter(model_path: str):
+    """Loads a TFLite interpreter from whichever runtime is installed:
+    tflite_runtime (the Pi deployment target), ai-edge-litert (its
+    successor package), or full TensorFlow (desktop testing)."""
+    try:
+        import tflite_runtime.interpreter as tflite
+        return tflite.Interpreter(model_path=model_path)
+    except ImportError:
+        pass
+    try:
+        from ai_edge_litert.interpreter import Interpreter
+        return Interpreter(model_path=model_path)
+    except ImportError:
+        pass
+    import tensorflow as tf
+    return tf.lite.Interpreter(model_path=model_path)
 
 
 @dataclass
@@ -46,21 +67,27 @@ DEFAULT_FANTASY_MAP = {
     "traffic light": "beacon",
 }
 
-# MobileNet-SSD COCO exports conventionally use these 1-based class IDs.
+# MobileNet-SSD COCO class IDs are 0-based against the model zip's
+# labelmap.txt with its leading "???" line removed (so class 0 = person).
+# This is the 91-class COCO paper label space, which has holes ("???")
+# where classes were dropped from the dataset; detections landing on a
+# hole are discarded. Verified empirically against
+# coco_ssd_mobilenet_v1_1.0_quant_2018_06_29 output.
 COCO_LABELS = [
-    "background", "person", "bicycle", "car", "motorcycle", "airplane",
-    "bus", "train", "truck", "boat", "traffic light", "fire hydrant",
-    "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse",
-    "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack",
-    "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis",
+    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train",
+    "truck", "boat", "traffic light", "fire hydrant", "???", "stop sign",
+    "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
+    "elephant", "bear", "zebra", "giraffe", "???", "backpack", "umbrella",
+    "???", "???", "handbag", "tie", "suitcase", "frisbee", "skis",
     "snowboard", "sports ball", "kite", "baseball bat", "baseball glove",
-    "skateboard", "surfboard", "tennis racket", "bottle", "wine glass",
-    "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
-    "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza",
-    "donut", "cake", "chair", "couch", "potted plant", "bed", "dining table",
-    "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
-    "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock",
-    "vase", "scissors", "teddy bear", "hair drier", "toothbrush",
+    "skateboard", "surfboard", "tennis racket", "bottle", "???",
+    "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana",
+    "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza",
+    "donut", "cake", "chair", "couch", "potted plant", "bed", "???",
+    "dining table", "???", "???", "toilet", "???", "tv", "laptop", "mouse",
+    "remote", "keyboard", "cell phone", "microwave", "oven", "toaster",
+    "sink", "refrigerator", "???", "book", "clock", "vase", "scissors",
+    "teddy bear", "hair drier", "toothbrush",
 ]
 
 
@@ -87,12 +114,11 @@ class ObjectMapper:
         self.model = None
         self._warned_not_implemented = False
         try:
-            import tflite_runtime.interpreter as tflite
-            self.model = tflite.Interpreter(model_path=model_path)
+            self.model = load_tflite_interpreter(model_path)
             self.model.allocate_tensors()
         except Exception as e:
-            print(f"[ObjectMapper] Model not loaded ({e}). Tagging disabled, "
-                  f"records will have empty object_tags until a model is in place.")
+            logger.warning("Model not loaded (%s). Tagging disabled, records "
+                           "will have empty object_tags until a model is in place.", e)
 
     def _to_fantasy_label(self, real_label: str) -> str:
         return self.fantasy_map.get(real_label.lower(), real_label)
@@ -143,7 +169,7 @@ class ObjectMapper:
             candidates = [v for v in vectors if v is not scores and len(v) == len(scores)]
             classes = candidates[0] if candidates else np.zeros(len(scores))
             results = []
-            for box, score, class_id in zip(boxes, scores, classes):
+            for box, score, class_id in zip(boxes, scores, classes, strict=False):
                 score = float(score)
                 if score < self.confidence_threshold:
                     continue
@@ -156,6 +182,8 @@ class ObjectMapper:
                 label = (COCO_LABELS[label_index]
                          if 0 <= label_index < len(COCO_LABELS)
                          else f"class_{label_index}")
+                if label == "???":
+                    continue  # hole in the COCO label space, not a real class
                 results.append(TaggedObject(
                     real_label=label,
                     fantasy_label=self._to_fantasy_label(label),
@@ -164,5 +192,5 @@ class ObjectMapper:
                 ))
             return results
         except Exception as exc:
-            print(f"[ObjectMapper] Inference failed; omitting tags: {exc}")
+            logger.warning("Inference failed; omitting tags: %s", exc)
             return []

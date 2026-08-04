@@ -11,8 +11,10 @@ Phase 2 orchestration. Run this after plugging the field unit's drive in:
     6. Move processed records out of the queue.
 """
 
+import logging
 import os
 import json
+import shutil
 import sqlite3
 import argparse
 import yaml
@@ -20,6 +22,9 @@ import yaml
 from schema import Zone
 from lore_generator import LoreGenerator
 from map_builder import RawRecord, cluster_records, render_map, stable_zone_id
+
+logging.basicConfig(level=logging.INFO, format="[%(name)s] %(message)s")
+logger = logging.getLogger("vb.desktop")
 
 
 def load_config(path: str = "config.yaml") -> dict:
@@ -48,7 +53,7 @@ def load_queued_records(queue_dir: str, quarantine_dir: str = None):
             if not os.path.isfile(os.path.join(queue_dir, image_name)):
                 raise ValueError("companion image is missing")
         except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
-            print(f"[main] Quarantining invalid record {filename}: {exc}")
+            logger.warning("Quarantining invalid record %s: %s", filename, exc)
             if quarantine_dir:
                 os.makedirs(quarantine_dir, exist_ok=True)
                 move_record_files([filename], queue_dir, quarantine_dir)
@@ -73,7 +78,9 @@ def move_record_files(filenames: list, src_dir: str, dest_dir: str):
         for ext in (".json", ".jpg"):
             src = os.path.join(src_dir, base + ext)
             if os.path.exists(src):
-                os.rename(src, os.path.join(dest_dir, base + ext))
+                # shutil.move survives a dest_dir on a different filesystem
+                # (e.g. quarantine configured off-drive), unlike os.rename
+                shutil.move(src, os.path.join(dest_dir, base + ext))
 
 
 def export_to_sqlite(zones: list, db_path: str):
@@ -97,8 +104,9 @@ def export_to_sqlite(zones: list, db_path: str):
             conn.execute("INSERT OR REPLACE INTO zones VALUES (?, ?, ?, ?)",
                       (zone.zone_id, zone.name, zone.center_lat, zone.center_lon))
             for npc in zone.npcs:
-                conn.execute("INSERT INTO npcs (zone_id, name, role, description) VALUES (?, ?, ?, ?)",
-                          (zone.zone_id, npc.name, npc.role, npc.description))
+                conn.execute(
+                "INSERT INTO npcs (zone_id, name, role, description) VALUES (?, ?, ?, ?)",
+                (zone.zone_id, npc.name, npc.role, npc.description))
             for fixture in zone.fixtures:
                 conn.execute(
                 "INSERT INTO fixtures (zone_id, name, fixture_type, description, gps_lat, gps_lon) "
@@ -118,7 +126,7 @@ def run(config_path: str = "config.yaml", move_processed: bool = True):
                                       os.path.join(cfg["input"]["processed_dir"], "quarantine"))
     filenames_and_records = load_queued_records(queue_dir, quarantine_dir)
     if not filenames_and_records:
-        print("[main] No queued records found. Nothing to process.")
+        logger.info("No queued records found. Nothing to process.")
         return
 
     # Records without a GPS fix can't be clustered or placed on the map.
@@ -131,7 +139,7 @@ def run(config_path: str = "config.yaml", move_processed: bool = True):
 
     no_fix_filenames = [f for f, _ in no_fix]
     if no_fix_filenames:
-        print(f"[main] {len(no_fix_filenames)} record(s) have no GPS fix and "
+        logger.info(f"{len(no_fix_filenames)} record(s) have no GPS fix and "
               f"cannot be processed: {', '.join(no_fix_filenames)}")
         if move_processed:
             no_gps_dir = cfg["input"].get(
@@ -139,16 +147,16 @@ def run(config_path: str = "config.yaml", move_processed: bool = True):
                     cfg["input"]["processed_dir"].rstrip("/\\")), "unprocessed_no_gps"))
             os.makedirs(no_gps_dir, exist_ok=True)
             move_record_files(no_fix_filenames, queue_dir, no_gps_dir)
-            print(f"[main] Moved them to {no_gps_dir} (not processed/).")
+            logger.info(f"Moved them to {no_gps_dir} (not processed/).")
 
     if not filenames_and_records:
-        print("[main] No records with a GPS fix to process.")
+        logger.info("No records with a GPS fix to process.")
         return
 
     filenames = [f for f, _ in filenames_and_records]
     records = [r for _, r in filenames_and_records]
 
-    print(f"[main] Loaded {len(records)} records. Clustering...")
+    logger.info(f"Loaded {len(records)} records. Clustering...")
     cluster_radius = cfg["map_builder"]["cluster_radius_meters"]
     clusters = cluster_records(records, cluster_radius)
 
@@ -163,7 +171,7 @@ def run(config_path: str = "config.yaml", move_processed: bool = True):
         center_lon = sum(r.gps_lon for r in cluster) / len(cluster)
         zone_id = stable_zone_id(center_lat, center_lon, cluster_radius)
         clusters_by_id.setdefault(zone_id, []).extend(cluster)
-    print(f"[main] {len(clusters_by_id)} zones identified.")
+    logger.info(f"{len(clusters_by_id)} zones identified.")
 
     llm_cfg = cfg["llm"]
     generator = LoreGenerator(
@@ -192,7 +200,7 @@ def run(config_path: str = "config.yaml", move_processed: bool = True):
         zone_render_data[zone_id] = {"name": zone_name, "center_lat": center_lat,
                                        "center_lon": center_lon}
 
-        print(f"[main] Zone {zone_id}: '{zone_name}', "
+        logger.info(f"Zone {zone_id}: '{zone_name}', "
               f"{len(npcs)} NPCs, {len(fixtures)} fixtures, {len(lore)} lore fragments")
 
     # Write raw JSON output
@@ -209,18 +217,18 @@ def run(config_path: str = "config.yaml", move_processed: bool = True):
              for r in sorted(records, key=lambda r: r.timestamp)]
     render_map(zone_render_data, tuple(cfg["map_builder"]["map_image_size"]),
                map_path, route=route)
-    print(f"[main] Map rendered to {map_path}")
+    logger.info(f"Map rendered to {map_path}")
 
     # Export to MMO world database
     export_to_sqlite(zones, cfg["mmo_export"]["sqlite_db_path"])
-    print(f"[main] Exported to {cfg['mmo_export']['sqlite_db_path']}")
+    logger.info(f"Exported to {cfg['mmo_export']['sqlite_db_path']}")
 
     # Move processed records out of the active queue
     if move_processed:
         processed_dir = cfg["input"]["processed_dir"]
         os.makedirs(processed_dir, exist_ok=True)
         move_record_files(filenames, queue_dir, processed_dir)
-        print(f"[main] Moved {len(filenames)} record sets to {processed_dir}")
+        logger.info(f"Moved {len(filenames)} record sets to {processed_dir}")
 
 
 if __name__ == "__main__":

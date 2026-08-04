@@ -65,5 +65,5 @@ class Zone:
             "center_lon": self.center_lon,
             "npcs": [n.to_dict() for n in self.npcs],
             "fixtures": [f.to_dict() for f in self.fixtures],
-            "lore": [l.to_dict() for l in self.lore],
+            "lore": [frag.to_dict() for frag in self.lore],
         }

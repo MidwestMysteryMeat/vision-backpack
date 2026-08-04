@@ -7,9 +7,12 @@ the configured timeout: capture should proceed and log without GPS
 rather than blocking indefinitely.
 """
 
+import logging
 import time
 import serial
 import pynmea2
+
+logger = logging.getLogger("vb.gps")
 
 
 class GPSLogger:
@@ -20,7 +23,7 @@ class GPSLogger:
         try:
             self._ser = serial.Serial(port, baud_rate, timeout=1.0)
         except Exception as e:
-            print(f"[GPSLogger] Could not open {port}: {e}. GPS tagging disabled.")
+            logger.warning("Could not open %s: %s. GPS tagging disabled.", port, e)
 
     def get_fix(self):
         """Returns (lat, lon) or (None, None) if no fix within timeout."""

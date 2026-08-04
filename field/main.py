@@ -14,17 +14,21 @@ Kept simple and low-compute on purpose: all the heavy lifting
 (lore generation, mapping) happens later on the desktop side.
 """
 
+import logging
 import time
 import yaml
 import cv2
+
+logging.basicConfig(level=logging.INFO, format="[%(name)s] %(message)s")
+logger = logging.getLogger("vb.main")
 
 try:
     import RPi.GPIO as GPIO
     HAS_GPIO = True
 except ImportError:
     HAS_GPIO = False
-    print("[main] RPi.GPIO not available, running in desktop simulation mode "
-          "(no button/LED support).")
+    logger.info("RPi.GPIO not available, running in desktop simulation mode "
+                "(no button/LED support).")
 
 from anonymizer import FaceAnonymizer
 from object_mapper import ObjectMapper
@@ -101,7 +105,7 @@ def run(config_path: str = "config.yaml"):
         raise RuntimeError("Could not open camera device.")
 
     interval = cfg["capture"]["interval_seconds"]
-    print(f"[main] Field capture running. Auto-interval: {interval}s. Ctrl+C to stop.")
+    logger.info("Field capture running. Auto-interval: %ss. Ctrl+C to stop.", interval)
 
     last_capture_time = 0.0
     last_flush_time = 0.0
@@ -123,7 +127,8 @@ def run(config_path: str = "config.yaml"):
                     continue
 
                 anonymized = anonymizer.anonymize(frame)
-                object_tags = object_mapper.tag_frame(frame)  # tags the original, not the masked copy
+                # Tag the original frame, not the masked copy
+                object_tags = object_mapper.tag_frame(frame)
                 lat, lon = gps.get_fix()
 
                 gait_descriptor = None
@@ -156,7 +161,7 @@ def run(config_path: str = "config.yaml"):
             time.sleep(0.5)
 
     except KeyboardInterrupt:
-        print("\n[main] Shutting down.")
+        logger.info("Shutting down.")
     finally:
         cap.release()
         gps.close()

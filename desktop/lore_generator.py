@@ -14,8 +14,11 @@ Supports two backends, configurable in config.yaml:
 """
 
 import json
-from typing import List, Dict, Optional
+import logging
+from typing import List, Optional
 from schema import NPCRecord, LocationFixture, LoreFragment
+
+logger = logging.getLogger("vb.lore")
 
 
 def extract_json_object(raw: str) -> Optional[dict]:
@@ -159,7 +162,7 @@ class LoreGenerator:
             # Model didn't return usable JSON even after fence/prose
             # stripping. Fail soft with an empty result rather than
             # crashing the whole batch.
-            print(f"[LoreGenerator] Failed to parse LLM output for zone {zone_id}, skipping.")
+            logger.warning("Failed to parse LLM output for zone %s, skipping.", zone_id)
             return (f"Unnamed Zone {zone_id}", [], [], [])
 
         # Valid JSON can still be missing fields or have the wrong shape
@@ -174,7 +177,7 @@ class LoreGenerator:
                                       source_gait_traits=gait_descriptors,
                                       zone_id=zone_id))
             except (KeyError, TypeError) as e:
-                print(f"[LoreGenerator] Skipping malformed NPC entry in zone {zone_id}: {e}")
+                logger.warning("Skipping malformed NPC entry in zone %s: %s", zone_id, e)
 
         for f in parsed.get("fixtures", []) or []:
             try:
@@ -184,15 +187,15 @@ class LoreGenerator:
                                                 gps_lat=center_lat, gps_lon=center_lon,
                                                 zone_id=zone_id))
             except (KeyError, TypeError) as e:
-                print(f"[LoreGenerator] Skipping malformed fixture entry in zone {zone_id}: {e}")
+                logger.warning("Skipping malformed fixture entry in zone %s: %s", zone_id, e)
 
-        for l in parsed.get("lore", []) or []:
+        for frag in parsed.get("lore", []) or []:
             try:
-                lore.append(LoreFragment(title=l["title"], text=l["text"],
+                lore.append(LoreFragment(title=frag["title"], text=frag["text"],
                                          related_zone_id=zone_id,
                                          source_record_timestamps=source_timestamps))
             except (KeyError, TypeError) as e:
-                print(f"[LoreGenerator] Skipping malformed lore entry in zone {zone_id}: {e}")
+                logger.warning("Skipping malformed lore entry in zone %s: %s", zone_id, e)
 
         zone_name = parsed.get("zone_name") or f"Unnamed Zone {zone_id}"
         return (zone_name, npcs, fixtures, lore)

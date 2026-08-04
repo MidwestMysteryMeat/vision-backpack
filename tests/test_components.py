@@ -2,7 +2,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import cv2
 import numpy as np
 
 from field.anonymizer import FaceAnonymizer
@@ -45,7 +44,7 @@ class ComponentTests(unittest.TestCase):
         mapper = ObjectMapper("missing.tflite")
         mapper.model = FakeInterpreter([
             np.array([[[0.0, 0.0, 1.0, 1.0]]], dtype=np.float32),
-            np.array([[1.0]], dtype=np.float32),
+            np.array([[0.0]], dtype=np.float32),  # class 0 = person (0-based)
             np.array([[0.9]], dtype=np.float32),
             np.array([1.0], dtype=np.float32),
         ])

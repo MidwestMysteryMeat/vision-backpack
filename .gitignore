@@ -1,3 +1,11 @@
 __pycache__/
 *.pyc
 
+# Downloaded model weights (fetched via field/fetch_models.py)
+field/models/*
+!field/models/.gitkeep
+
+# Desktop-side outputs
+desktop/output/
+output/
+

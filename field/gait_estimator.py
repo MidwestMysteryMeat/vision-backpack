@@ -14,11 +14,14 @@ would turn an ephemeral descriptor into a biometric signature, which is
 explicitly out of scope for this project (see SPEC_SHEET.md section 7).
 """
 
+import logging
 import time
 import cv2
 import numpy as np
 from dataclasses import dataclass
 from typing import List, Optional
+
+logger = logging.getLogger("vb.gait")
 
 
 # MoveNet Lightning keypoint indices (COCO-style, 17 points)
@@ -40,12 +43,15 @@ class GaitEstimator:
         self.model = None
         self._warned_not_implemented = False
         try:
-            import tflite_runtime.interpreter as tflite
-            self.model = tflite.Interpreter(model_path=model_path)
+            try:
+                from object_mapper import load_tflite_interpreter
+            except ImportError:  # imported as part of the field package
+                from field.object_mapper import load_tflite_interpreter
+            self.model = load_tflite_interpreter(model_path)
             self.model.allocate_tensors()
         except Exception as e:
-            print(f"[GaitEstimator] Pose model not loaded ({e}). "
-                  f"Gait descriptors will be omitted until a model is in place.")
+            logger.warning("Pose model not loaded (%s). Gait descriptors "
+                           "will be omitted until a model is in place.", e)
 
     def _run_pose_model(self, frame: np.ndarray) -> Optional[np.ndarray]:
         """Returns raw keypoints for a single frame, or None. Internal use
@@ -72,7 +78,7 @@ class GaitEstimator:
                 raise ValueError(f"Unexpected MoveNet output shape: {output.shape}")
             return keypoints[0].astype(np.float32, copy=True)
         except Exception as exc:
-            print(f"[GaitEstimator] Inference failed; omitting descriptor: {exc}")
+            logger.warning("Inference failed; omitting descriptor: %s", exc)
             return None
 
     def _describe(self, avg_speed: float, stride_variance: float,
