@@ -67,9 +67,11 @@ def run(config_path: str = "config.yaml"):
     led_pin = cfg["capture"]["status_led_gpio"]
     setup_gpio(button_pin, led_pin)
 
+    anon_cfg = cfg["anonymization"]
+    cascade_paths = anon_cfg.get("face_cascade_paths") or [anon_cfg["face_cascade_path"]]
     anonymizer = FaceAnonymizer(
-        cascade_path=cfg["anonymization"]["face_cascade_path"],
-        min_face_size_px=cfg["anonymization"]["min_face_size_px"],
+        cascade_path=cascade_paths,
+        min_face_size_px=anon_cfg["min_face_size_px"],
     )
     object_mapper = ObjectMapper(
         model_path=cfg["object_tagging"]["model_path"],
@@ -82,6 +84,7 @@ def run(config_path: str = "config.yaml"):
         gait_estimator = GaitEstimator(
             model_path=gait_cfg["model_path"],
             confidence_threshold=gait_cfg.get("confidence_threshold", 0.3),
+            thresholds=gait_cfg.get("thresholds"),
         )
     gps = GPSLogger(
         port=cfg["gps"]["serial_port"],

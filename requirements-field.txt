@@ -1,7 +1,12 @@
-opencv-python-headless>=4.9.0
-numpy>=1.26.0
-pyyaml>=6.0
-pyserial>=3.5
-pynmea2>=1.19.0
-RPi.GPIO>=0.7.1
+# Upper bounds pin major versions so a Pi re-image years later installs a
+# compatible stack; bump deliberately, not by surprise.
+opencv-python-headless>=4.9.0,<5
+numpy>=1.26.0,<3
+pyyaml>=6.0,<7
+pyserial>=3.5,<4
+pynmea2>=1.19.0,<2
+RPi.GPIO>=0.7.1,<1
+# TFLite runtime: tflite-runtime is the primary target; if no wheel exists
+# for your Pi OS Python, `pip install ai-edge-litert` works as a drop-in
+# (the code falls back to it automatically).
 tflite-runtime>=2.14.0

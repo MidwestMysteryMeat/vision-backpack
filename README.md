@@ -4,15 +4,16 @@ See `SPEC_SHEET.md` for the full hardware BOM, power budget, architecture,
 and phased implementation plan. This README covers software setup for
 both halves of the system.
 
-## Field unit (Pi 5, 16GB, worn)
+## Field unit (Pi 5 16GB worn; Pi 4 4GB budget build also supported)
 
 ```bash
 cd field
 pip install -r ../requirements-field.txt --break-system-packages
 ```
 
-Fetch the three model files (Haar cascade for faces, MobileNet-SSD COCO
-for object tagging, MoveNet Lightning for gait pose) into `field/models/`:
+Fetch the model files (frontal + profile Haar cascades for faces,
+MobileNet-SSD COCO for object tagging, MoveNet Lightning for gait pose)
+into `field/models/`:
 
 ```bash
 python fetch_models.py
@@ -33,10 +34,11 @@ python main.py
 Runs continuously: auto-captures every `capture.interval_seconds`, or on
 button press (GPIO pin set in config). Ctrl+C to stop.
 
-**Session length:** this is a short-session build (roughly 2-3 hrs on a
-20,000mAh bank). See `SPEC_SHEET.md` §5 for the power tradeoff behind
-going with the Pi 5 over the original Pi Zero W concept. Bring spare
-battery banks for longer outings.
+**Session length:** the Pi 5 is a short-session build (roughly 2-3 hrs
+on a 20,000mAh bank); the Pi 4 4GB budget build stretches the same bank
+to roughly 3.5-4.5 hrs at the cost of slower inference per capture. See
+`SPEC_SHEET.md` §5 for the power tradeoff and §2.1b for the Pi 4 build.
+Bring spare battery banks for longer outings.
 
 **Gait descriptors:** when `gait.enabled` is true in config and a person
 is detected in frame, a short burst of frames is analyzed on-device to

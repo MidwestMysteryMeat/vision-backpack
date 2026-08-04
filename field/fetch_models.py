@@ -1,14 +1,15 @@
 """
 fetch_models.py
 
-Fetches the three model files the field unit needs into field/models/,
+Fetches the model files the field unit needs into field/models/,
 matching the paths already set in config.yaml:
 
-    models/haarcascade_frontalface_default.xml   (face detection)
+    models/haarcascade_frontalface_default.xml   (face detection, frontal)
+    models/haarcascade_profileface.xml           (face detection, profile)
     models/mobilenet_ssd_coco.tflite             (object tagging)
     models/movenet_lightning.tflite              (gait pose estimation)
 
-The Haar cascade is copied from the installed OpenCV package (it ships
+The Haar cascades are copied from the installed OpenCV package (they ship
 with opencv-python), falling back to the OpenCV GitHub mirror. The two
 TFLite models are downloaded from their published hosting. Run once on
 the Pi (or anywhere, then copy models/ over):
@@ -36,6 +37,10 @@ CASCADE_NAME = "haarcascade_frontalface_default.xml"
 CASCADE_URL = ("https://raw.githubusercontent.com/opencv/opencv/4.x/"
                "data/haarcascades/haarcascade_frontalface_default.xml")
 
+PROFILE_CASCADE_NAME = "haarcascade_profileface.xml"
+PROFILE_CASCADE_URL = ("https://raw.githubusercontent.com/opencv/opencv/4.x/"
+                       "data/haarcascades/haarcascade_profileface.xml")
+
 # Classic quantized MobileNet-SSD COCO export; the zip's detect.tflite is
 # the model this project's SSD output decoding was written against.
 SSD_ZIP_URL = ("https://storage.googleapis.com/download.tensorflow.org/models/"
@@ -54,19 +59,21 @@ def _download(url: str) -> bytes:
         return resp.read()
 
 
-def fetch_cascade(dest: str):
-    try:
-        import cv2
-        bundled = os.path.join(cv2.data.haarcascades, CASCADE_NAME)
-        if os.path.isfile(bundled):
-            shutil.copyfile(bundled, dest)
-            logger.info("Copied Haar cascade from installed OpenCV.")
-            return
-    except (ImportError, AttributeError):
-        pass
-    with open(dest, "wb") as f:
-        f.write(_download(CASCADE_URL))
-    logger.info("Downloaded Haar cascade.")
+def _make_cascade_fetcher(name: str, url: str):
+    def fetch(dest: str):
+        try:
+            import cv2
+            bundled = os.path.join(cv2.data.haarcascades, name)
+            if os.path.isfile(bundled):
+                shutil.copyfile(bundled, dest)
+                logger.info("Copied %s from installed OpenCV.", name)
+                return
+        except (ImportError, AttributeError):
+            pass
+        with open(dest, "wb") as f:
+            f.write(_download(url))
+        logger.info("Downloaded %s.", name)
+    return fetch
 
 
 def fetch_ssd(dest: str):
@@ -94,7 +101,9 @@ def main():
 
     os.makedirs(MODELS_DIR, exist_ok=True)
     jobs = [
-        (CASCADE_NAME, fetch_cascade),
+        (CASCADE_NAME, _make_cascade_fetcher(CASCADE_NAME, CASCADE_URL)),
+        (PROFILE_CASCADE_NAME, _make_cascade_fetcher(PROFILE_CASCADE_NAME,
+                                                     PROFILE_CASCADE_URL)),
         (SSD_NAME, fetch_ssd),
         (MOVENET_NAME, fetch_movenet),
     ]

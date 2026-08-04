@@ -11,6 +11,7 @@ Phase 2 orchestration. Run this after plugging the field unit's drive in:
     6. Move processed records out of the queue.
 """
 
+import contextlib
 import logging
 import os
 import json
@@ -85,7 +86,9 @@ def move_record_files(filenames: list, src_dir: str, dest_dir: str):
 
 def export_to_sqlite(zones: list, db_path: str):
     os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
-    with sqlite3.connect(db_path) as conn:
+    # closing() matters: sqlite3's context manager commits but does not
+    # close, which leaves the DB file locked until interpreter exit.
+    with contextlib.closing(sqlite3.connect(db_path)) as conn, conn:
         conn.execute("""CREATE TABLE IF NOT EXISTS zones (
         zone_id TEXT PRIMARY KEY, name TEXT, center_lat REAL, center_lon REAL)""")
         conn.execute("""CREATE TABLE IF NOT EXISTS npcs (

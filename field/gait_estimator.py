@@ -37,9 +37,24 @@ class _FrameKeypoints:
     timestamp: float
 
 
+# Rough starting points for mapping metrics to labels; override any of
+# these via config (gait.thresholds) once tuned against real captures.
+DEFAULT_THRESHOLDS = {
+    "brisk_speed": 0.15,       # hip-midpoint displacement per frame, above = brisk
+    "slow_speed": 0.05,        # below = slow
+    "rigid_variance": 0.02,    # ankle-separation variance, below = rigid
+    "shuffle_variance": 0.08,  # above = shuffling
+    "hunched_angle_deg": 10,   # torso lean from vertical, above = hunched
+}
+
+
 class GaitEstimator:
-    def __init__(self, model_path: str, confidence_threshold: float = 0.3):
+    def __init__(self, model_path: str, confidence_threshold: float = 0.3,
+                 thresholds: dict = None):
         self.confidence_threshold = confidence_threshold
+        self.thresholds = dict(DEFAULT_THRESHOLDS)
+        if thresholds:
+            self.thresholds.update(thresholds)
         self.model = None
         self._warned_not_implemented = False
         try:
@@ -83,13 +98,14 @@ class GaitEstimator:
 
     def _describe(self, avg_speed: float, stride_variance: float,
                   avg_torso_angle: float) -> str:
-        """Maps coarse numeric metrics to a text label. Thresholds are
-        rough starting points; tune against real captures."""
-        speed_word = "brisk" if avg_speed > 0.15 else (
-            "slow" if avg_speed < 0.05 else "steady")
-        regularity_word = "rigid" if stride_variance < 0.02 else (
-            "shuffling" if stride_variance > 0.08 else "even")
-        posture_word = "upright" if avg_torso_angle < 10 else "hunched"
+        """Maps coarse numeric metrics to a text label using the
+        configured thresholds (gait.thresholds in config.yaml)."""
+        t = self.thresholds
+        speed_word = "brisk" if avg_speed > t["brisk_speed"] else (
+            "slow" if avg_speed < t["slow_speed"] else "steady")
+        regularity_word = "rigid" if stride_variance < t["rigid_variance"] else (
+            "shuffling" if stride_variance > t["shuffle_variance"] else "even")
+        posture_word = "upright" if avg_torso_angle < t["hunched_angle_deg"] else "hunched"
 
         return f"{speed_word}, {regularity_word} stride, {posture_word} posture"
 

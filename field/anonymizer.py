@@ -15,19 +15,42 @@ import hashlib
 
 
 class FaceAnonymizer:
-    def __init__(self, cascade_path: str, min_face_size_px: int = 30):
-        self.detector = cv2.CascadeClassifier(cascade_path)
-        if self.detector.empty():
-            raise ValueError(f"Face anonymizer model could not be loaded: {cascade_path}")
+    def __init__(self, cascade_path, min_face_size_px: int = 30):
+        """cascade_path: a single cascade file path, or a list of them.
+
+        The frontal cascade alone misses side-profile faces, which is a
+        privacy hole, not just an accuracy nit: an unmasked profile hits
+        disk. Pass the profile cascade alongside the frontal one; profile
+        detection runs on the frame and its mirror since the OpenCV
+        profile cascade is trained on one facing only.
+        """
+        paths = [cascade_path] if isinstance(cascade_path, str) else list(cascade_path)
+        self.detectors = []
+        for path in paths:
+            det = cv2.CascadeClassifier(path)
+            if det.empty():
+                raise ValueError(f"Face anonymizer model could not be loaded: {path}")
+            self.detectors.append(det)
         self.min_face_size_px = min_face_size_px
 
     def detect_faces(self, frame: np.ndarray) -> list:
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = self.detector.detectMultiScale(
-            gray, scaleFactor=1.1, minNeighbors=5,
-            minSize=(self.min_face_size_px, self.min_face_size_px)
-        )
-        return [tuple(f) for f in faces]  # list of (x, y, w, h)
+        width = gray.shape[1]
+        mirrored = cv2.flip(gray, 1)
+        regions = []
+        for det in self.detectors:
+            for face in det.detectMultiScale(
+                    gray, scaleFactor=1.1, minNeighbors=5,
+                    minSize=(self.min_face_size_px, self.min_face_size_px)):
+                regions.append(tuple(int(v) for v in face))
+            # Mirror pass catches the facing the cascade wasn't trained on
+            # (harmless duplicates for symmetric cascades: overlapping
+            # regions just get masked twice).
+            for (x, y, w, h) in det.detectMultiScale(
+                    mirrored, scaleFactor=1.1, minNeighbors=5,
+                    minSize=(self.min_face_size_px, self.min_face_size_px)):
+                regions.append((int(width - x - w), int(y), int(w), int(h)))
+        return regions  # list of (x, y, w, h)
 
     def _generate_fantasy_overlay(self, w: int, h: int, seed_bytes: bytes) -> np.ndarray:
         """

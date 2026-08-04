@@ -21,7 +21,12 @@ gps:
   fix_timeout_s: 10             # skip GPS tag if no fix within this window
 
 anonymization:
-  face_cascade_path: "models/haarcascade_frontalface_default.xml"
+  # Frontal AND profile cascades: frontal alone misses side-on faces,
+  # which would let an unmasked face reach disk. Profile detection also
+  # runs on the mirrored frame to cover both facings.
+  face_cascade_paths:
+    - "models/haarcascade_frontalface_default.xml"
+    - "models/haarcascade_profileface.xml"
   overlay_style: "procedural_mask"   # never store or transmit the raw face region
   min_face_size_px: 30
 
@@ -31,10 +36,19 @@ object_tagging:
   fantasy_map_path: "fantasy_object_map.yaml"
 
 gait:
-  enabled: true                 # requires the Pi 5; not supported on Zero-class builds
+  enabled: true                 # Pi 5 or Pi 4; not supported on Zero-class builds
   model_path: "models/movenet_lightning.tflite"
   burst_frame_count: 15         # ~1-2 seconds at capture time
   confidence_threshold: 0.3
+  # Metric -> label thresholds. These are untuned starting points; adjust
+  # against real captures. Keys and defaults: see DEFAULT_THRESHOLDS in
+  # gait_estimator.py. Uncomment to override:
+  # thresholds:
+  #   brisk_speed: 0.15
+  #   slow_speed: 0.05
+  #   rigid_variance: 0.02
+  #   shuffle_variance: 0.08
+  #   hunched_angle_deg: 10
   # Only a text label is ever written to disk. See gait_estimator.py
   # and SPEC_SHEET.md section 7 for why raw pose data is never persisted.
 

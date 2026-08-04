@@ -15,6 +15,8 @@ MMO content. Two-phase architecture:
   Upgraded from an original Pi Zero W concept specifically to support
   on-device pose estimation for gait. The accepted tradeoff is short
   session length (roughly 2-3 hrs) rather than all-day runtime; see §5.
+  A Pi 4 4GB budget build is also supported with slower inference but
+  longer runtime; see §2.1b.
 - **Phase 2, Desktop processing (home):** the drive gets plugged into a
   local GPU-capable machine, where a local LLM via llama-server (or Ollama)
   turns the raw tagged captures into structured JSON: NPCs, locations, and
@@ -37,7 +39,7 @@ signature would defeat the purpose of the anonymizer entirely.
 
 Prices are rough 2026 estimates (USD) and should be treated as ballpark figures, not quotes: verify current prices before ordering, since component costs and part availability shift over time and these numbers may already be out of date.
 
-### 2.1 Field unit (worn), Pi 5 16GB build
+### 2.1 Field unit (worn), Pi 5 16GB build (primary)
 
 | Component | Example part | Est. cost |
 |---|---|---|
@@ -55,6 +57,34 @@ Prices are rough 2026 estimates (USD) and should be treated as ballpark figures,
 | **Field unit total** | | **~$318-388** (excluding shared drive) |
 
 *Gait pose model (MoveNet Lightning or similar, tflite) is free/open weights: no added hardware cost, just the compute headroom the Pi 5 provides.*
+
+### 2.1b Field unit alternative: Pi 4 4GB budget build (optional)
+
+A Pi 4 Model B (4GB) works as a cheaper, lower-draw field unit with the
+same software stack unchanged. All models fit comfortably in 4GB (the
+three inference models total under 15MB). The tradeoffs:
+
+- **Slower inference.** MoveNet Lightning runs a few fps on the Pi 4 CPU
+  vs. comfortably real-time on the Pi 5. Gait bursts are captured first
+  and analyzed after, so this still works; each capture just takes
+  several seconds longer to process. Object tagging is similarly slower
+  but well within a 45s capture interval.
+- **Longer runtime.** Lower draw stretches the same 20,000mAh bank to
+  roughly 3.5-4.5 hrs (see §5), which makes the Pi 4 the better pick if
+  session length matters more than capture turnaround.
+- **Same privacy guarantees.** Anonymization and the ephemeral gait rule
+  are identical; only speed differs.
+
+| Component (differences only) | Example part | Est. cost |
+|---|---|---|
+| Compute | Raspberry Pi 4 Model B, 4GB | $55 |
+| Cooling | Passive heatsink case (fan optional) | $10 |
+| Battery | Same 20,000mAh bank, longer runtime | (same) |
+| **Field unit total (Pi 4 build)** | | **~$248-303** (excluding shared drive) |
+
+Everything else in §2.1 (camera, GPS, storage, button/LED, enclosure)
+carries over unchanged. Camera Module 3 works on the Pi 4's CSI port.
+Pi Zero-class boards remain unsupported for gait; the Pi 4 is the floor.
 
 ### 2.2 Desktop processing station
 
@@ -147,6 +177,7 @@ vision_backpack/
 |---|---|---|
 | Pi 5 (16GB) + camera + GPS, gait estimation active, no mic | ~6-8W @ 5V (idle-to-load average) | ~2-2.5 hrs |
 | + microphone + heavier tagging load | ~7-9W @ 5V | ~1.5-2 hrs |
+| Pi 4 (4GB) budget build, camera + GPS, gait active, no mic | ~3.5-5.5W @ 5V | ~3.5-4.5 hrs |
 
 This is the accepted tradeoff of the Pi 5 upgrade: on-device pose
 estimation for gait descriptors was prioritized over all-day runtime.
@@ -171,6 +202,7 @@ is running.
 
 - [ ] Verify anonymization happens before any disk write, not after. No raw frame should ever exist even transiently.
 - [ ] Confirm anonymization is irreversible (procedural overlay, not a reversible blur/pixelation that could theoretically be undone).
+- [ ] Verify profile (side-on) faces get masked, not just frontal ones. Both cascades must be present in `field/models/` and listed in config; test with a side-profile capture. See §8 for detection limits that remain even with both.
 - [ ] Confirm gait descriptors are text labels only. No keypoint arrays, pose vectors, or anything matchable against a future capture should ever be written to disk (see §7).
 - [ ] No audio recording of identifiable speech content if mic is enabled. Ambient tagging only, not transcription of bystander conversations.
 - [ ] Be mindful of local wiretapping/recording consent laws if audio capture is enabled in public spaces (varies by state; some require all-party consent).
@@ -207,3 +239,45 @@ The text label feeds into the desktop-side lore prompt as flavor
 material for NPC generation, the same role the object fantasy-tags
 already play, just adding movement/personality texture. It is never
 compared against, matched to, or linked with any other record.
+
+---
+
+## 8. Software Gaps / Known Limitations
+
+Tracked honestly so field testing knows what to watch for. Items get
+struck through (or removed) as they close.
+
+**Detection quality**
+- Haar cascades (frontal + profile, both facings via mirror pass) still
+  miss faces that are heavily occluded, strongly angled, or small/far
+  away. The §6 verification step exists precisely because detection is
+  not perfect; a DNN face detector (e.g. YuNet) is the upgrade path if
+  field review finds misses.
+- Gait analysis assumes one person in frame: MoveNet Lightning is
+  single-pose, so with multiple people the burst describes whichever
+  person the model locks onto. The descriptor is still valid flavor
+  text, but it isn't per-person.
+- Gait thresholds (gait.thresholds in field config) are untuned starting
+  points; most real captures will read "steady/even/upright" until tuned
+  against footage.
+- Object tagging uses a 2018-era MobileNet-SSD quant model. Fine for
+  coarse tags; swap the model file if better small tflite detectors are
+  worth it later.
+
+**Pipeline behavior**
+- Clustering is greedy and order-dependent; the same records in a
+  different order can split/merge clusters slightly differently. At
+  walking-route scale this is cosmetic.
+- Zone grid IDs quantize cluster centroids; a centroid drifting across a
+  grid-cell boundary between sessions creates a neighboring zone rather
+  than merging. Accepted: it reads as organic world growth.
+- The LLM call has no retry/backoff; an unreachable server fails that
+  zone (fail-soft, empty content) rather than retrying.
+- No automated CI yet; lint (ruff) and tests run locally.
+
+**Field operation**
+- Auto-capture interval and button presses share one camera pipeline;
+  captures are sequential. A gait burst extends a capture by its burst
+  length (longer on the Pi 4 build, §2.1b).
+- Battery/runtime numbers in §5 are estimates until measured on the
+  actual rig (phase 8).
