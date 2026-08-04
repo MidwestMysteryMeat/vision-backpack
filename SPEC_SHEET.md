@@ -273,7 +273,6 @@ struck through (or removed) as they close.
   than merging. Accepted: it reads as organic world growth.
 - The LLM call has no retry/backoff; an unreachable server fails that
   zone (fail-soft, empty content) rather than retrying.
-- No automated CI yet; lint (ruff) and tests run locally.
 
 **Field operation**
 - Auto-capture interval and button presses share one camera pipeline;
