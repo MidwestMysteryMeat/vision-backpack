@@ -73,6 +73,57 @@ class ComponentTests(unittest.TestCase):
             self.assertTrue(image_path.exists())
             self.assertGreater(image_path.stat().st_size, 0)
 
+    def test_flush_moves_complete_pairs_and_skips_orphans(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            buffer_dir = Path(tmp) / "buffer"
+            drive = Path(tmp) / "drive"
+            writer = QueueWriter(str(buffer_dir), str(drive))
+            writer.write_record(np.zeros((8, 8, 3), dtype=np.uint8),
+                                None, None, [], None)
+            # An orphan JSON with no companion image must not be flushed
+            (buffer_dir / "orphan.json").write_text("{}")
+
+            writer._drive_available = lambda: True
+            moved = writer.flush_buffer_to_drive()
+
+            self.assertEqual(moved, 1)
+            queue = drive / "queue"
+            self.assertEqual(len(list(queue.glob("*.json"))), 1)
+            self.assertEqual(len(list(queue.glob("*.jpg"))), 1)
+            self.assertTrue((buffer_dir / "orphan.json").exists())
+            self.assertEqual(len(list(buffer_dir.glob("*.jpg"))), 0)
+
+    def test_flush_survives_cross_device_rename_failure(self):
+        from unittest import mock
+        import field.queue_writer as qw
+
+        with tempfile.TemporaryDirectory() as tmp:
+            buffer_dir = Path(tmp) / "buffer"
+            drive = Path(tmp) / "drive"
+            writer = QueueWriter(str(buffer_dir), str(drive))
+            writer.write_record(np.zeros((8, 8, 3), dtype=np.uint8),
+                                None, None, [], None)
+            writer._drive_available = lambda: True
+
+            real_replace = qw.os.replace
+
+            def replace_exdev_from_buffer(src, dst):
+                # Simulate EXDEV for direct buffer->drive renames; the
+                # same-directory rename of the copy tmp file still works.
+                if Path(src).parent == buffer_dir:
+                    raise OSError(18, "Invalid cross-device link")
+                return real_replace(src, dst)
+
+            with mock.patch.object(qw.os, "replace",
+                                   side_effect=replace_exdev_from_buffer):
+                moved = writer.flush_buffer_to_drive()
+
+            self.assertEqual(moved, 1)
+            queue = drive / "queue"
+            self.assertEqual(len(list(queue.glob("*.json"))), 1)
+            self.assertEqual(len(list(queue.glob("*.jpg"))), 1)
+            self.assertEqual(list(buffer_dir.iterdir()), [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,7 +19,7 @@ import yaml
 
 from schema import Zone
 from lore_generator import LoreGenerator
-from map_builder import RawRecord, cluster_records, render_map
+from map_builder import RawRecord, cluster_records, render_map, stable_zone_id
 
 
 def load_config(path: str = "config.yaml") -> dict:
@@ -149,8 +149,21 @@ def run(config_path: str = "config.yaml", move_processed: bool = True):
     records = [r for _, r in filenames_and_records]
 
     print(f"[main] Loaded {len(records)} records. Clustering...")
-    clusters = cluster_records(records, cfg["map_builder"]["cluster_radius_meters"])
-    print(f"[main] {len(clusters)} zones identified.")
+    cluster_radius = cfg["map_builder"]["cluster_radius_meters"]
+    clusters = cluster_records(records, cluster_radius)
+
+    # Zone IDs are derived from geographic position (see stable_zone_id) so
+    # zones from different sessions accumulate in the world DB instead of
+    # overwriting each other. Two clusters from the same run can land in
+    # the same grid cell; merge those so one doesn't silently clobber the
+    # other during export.
+    clusters_by_id = {}
+    for cluster in clusters:
+        center_lat = sum(r.gps_lat for r in cluster) / len(cluster)
+        center_lon = sum(r.gps_lon for r in cluster) / len(cluster)
+        zone_id = stable_zone_id(center_lat, center_lon, cluster_radius)
+        clusters_by_id.setdefault(zone_id, []).extend(cluster)
+    print(f"[main] {len(clusters_by_id)} zones identified.")
 
     llm_cfg = cfg["llm"]
     generator = LoreGenerator(
@@ -162,8 +175,7 @@ def run(config_path: str = "config.yaml", move_processed: bool = True):
     zones = []
     zone_render_data = {}
 
-    for i, cluster in enumerate(clusters):
-        zone_id = f"zone_{i:04d}"
+    for zone_id, cluster in clusters_by_id.items():
         all_tags = [tag for r in cluster for tag in r.fantasy_tags]
         all_gait = [g for r in cluster for g in r.gait_descriptors]
         center_lat = sum(r.gps_lat for r in cluster) / len(cluster)
@@ -190,10 +202,13 @@ def run(config_path: str = "config.yaml", move_processed: bool = True):
         with open(out_path, "w") as f:
             json.dump(zone.to_dict(), f, indent=2)
 
-    # Render map
+    # Render map, with the walked route drawn in capture order
     os.makedirs(cfg["map_builder"]["output_dir"], exist_ok=True)
     map_path = os.path.join(cfg["map_builder"]["output_dir"], "session_map.png")
-    render_map(zone_render_data, tuple(cfg["map_builder"]["map_image_size"]), map_path)
+    route = [(r.gps_lat, r.gps_lon)
+             for r in sorted(records, key=lambda r: r.timestamp)]
+    render_map(zone_render_data, tuple(cfg["map_builder"]["map_image_size"]),
+               map_path, route=route)
     print(f"[main] Map rendered to {map_path}")
 
     # Export to MMO world database

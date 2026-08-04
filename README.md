@@ -71,10 +71,16 @@ python main.py
 
 This clusters the session's GPS-tagged records into zones, generates
 NPCs/fixtures/lore per zone via the configured LLM, renders a fantasy map
-of the walked route, and exports everything into a SQLite database
-matching the existing MMO world-database schema (zones, NPCs, fixtures,
-lore; pairs with the quest hook and location fixture systems from prior
+of the walked route (route path drawn under geographically-scaled zone
+markers), and exports everything into a SQLite database matching the
+existing MMO world-database schema (zones, NPCs, fixtures, lore; pairs
+with the quest hook and location fixture systems from prior
 world-building pipeline work).
+
+Zone IDs are derived from geographic position, not run order, so
+processing multiple sessions accumulates zones in the world database:
+walking a new area adds zones, re-walking a known area regenerates just
+those zones.
 
 Processed records get moved out of the drive's active queue automatically
 unless you pass `--keep-queue`.

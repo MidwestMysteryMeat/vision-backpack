@@ -20,9 +20,29 @@ Record format (one JSON file + one image file per capture):
 
 import os
 import json
+import shutil
 import time
 import uuid
 import cv2
+
+
+def _move_across_filesystems(src: str, dest: str):
+    """Move a file even when src and dest are on different filesystems.
+
+    os.replace() raises EXDEV across devices, which is exactly the layout
+    here: the local buffer lives on the SD card and the queue lives on the
+    external drive. Copy to a hidden temp name on the destination, then
+    rename into place so the desktop side never sees a half-copied file.
+    """
+    try:
+        os.replace(src, dest)
+        return
+    except OSError:
+        pass
+    tmp = os.path.join(os.path.dirname(dest), f".{os.path.basename(dest)}.tmp")
+    shutil.copy2(src, tmp)
+    os.replace(tmp, dest)
+    os.remove(src)
 
 
 class QueueWriter:
@@ -90,7 +110,12 @@ class QueueWriter:
 
     def flush_buffer_to_drive(self):
         """Move any locally buffered records over to the external drive
-        once it becomes available (e.g. plugged in mid-session)."""
+        once it becomes available (e.g. plugged in mid-session).
+
+        Fail-soft per record: one unmovable record (drive yanked mid-copy,
+        permission hiccup) must not crash the capture loop or block the
+        rest of the buffer from flushing.
+        """
         if not self._drive_available():
             return 0
 
@@ -105,7 +130,20 @@ class QueueWriter:
             image_src = os.path.join(self.local_buffer_dir, f"{record_id}.jpg")
             if not (os.path.isfile(json_src) and os.path.isfile(image_src)):
                 continue
-            os.replace(image_src, os.path.join(target, f"{record_id}.jpg"))
-            os.replace(json_src, os.path.join(target, f"{record_id}.json"))
-            moved += 1
+            image_dest = os.path.join(target, f"{record_id}.jpg")
+            try:
+                # Image first, JSON last: the desktop side treats the JSON
+                # as the record's marker and checks for the companion image,
+                # so a record must never appear in the queue image-less.
+                _move_across_filesystems(image_src, image_dest)
+                try:
+                    _move_across_filesystems(json_src, os.path.join(target, f"{record_id}.json"))
+                except OSError:
+                    # Put the image back so the buffered pair stays intact
+                    # and the record retries on the next flush.
+                    _move_across_filesystems(image_dest, image_src)
+                    raise
+                moved += 1
+            except OSError as e:
+                print(f"[QueueWriter] Could not flush record {record_id}: {e}")
         return moved

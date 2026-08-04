@@ -14,8 +14,55 @@ Supports two backends, configurable in config.yaml:
 """
 
 import json
-from typing import List, Dict
+from typing import List, Dict, Optional
 from schema import NPCRecord, LocationFixture, LoreFragment
+
+
+def extract_json_object(raw: str) -> Optional[dict]:
+    """Best-effort extraction of a JSON object from LLM output.
+
+    Small local models routinely wrap the JSON in ```json fences or add a
+    sentence of prose around it despite the "ONLY the JSON" instruction.
+    Try the raw string first, then the first balanced {...} span. Returns
+    None if nothing parses to a dict.
+    """
+    for candidate in (raw, _first_braced_span(raw)):
+        if not candidate:
+            continue
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    return None
+
+
+def _first_braced_span(raw: str) -> Optional[str]:
+    start = raw.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(raw)):
+        c = raw[i]
+        if in_string:
+            if escape:
+                escape = False
+            elif c == "\\":
+                escape = True
+            elif c == '"':
+                in_string = False
+        elif c == '"':
+            in_string = True
+        elif c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return raw[start:i + 1]
+    return None
 
 PROMPT_TEMPLATE = """You are helping generate fantasy MMO world content from
 real-world location tags collected on a walk. You will be given a list of
@@ -107,16 +154,12 @@ class LoreGenerator:
         else:
             raise ValueError(f"Unknown provider: {self.provider}")
 
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            # Model didn't return clean JSON. Fail soft with an empty result
-            # rather than crashing the whole batch.
+        parsed = extract_json_object(raw)
+        if parsed is None:
+            # Model didn't return usable JSON even after fence/prose
+            # stripping. Fail soft with an empty result rather than
+            # crashing the whole batch.
             print(f"[LoreGenerator] Failed to parse LLM output for zone {zone_id}, skipping.")
-            return (f"Unnamed Zone {zone_id}", [], [], [])
-
-        if not isinstance(parsed, dict):
-            print(f"[LoreGenerator] LLM output for zone {zone_id} is not a JSON object, skipping.")
             return (f"Unnamed Zone {zone_id}", [], [], [])
 
         # Valid JSON can still be missing fields or have the wrong shape

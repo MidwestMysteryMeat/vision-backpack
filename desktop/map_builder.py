@@ -39,6 +39,21 @@ def haversine_meters(lat1, lon1, lat2, lon2) -> float:
     return 2 * R * math.asin(math.sqrt(a))
 
 
+def stable_zone_id(center_lat: float, center_lon: float, radius_meters: float) -> str:
+    """Derives a zone ID from geographic position rather than run order.
+
+    Sequential IDs (zone_0000, zone_0001, ...) restart every session, so a
+    second walk's zones overwrite the first walk's rows in the world
+    database. Quantizing the centroid to a grid keyed by cluster radius
+    gives the same place the same ID across sessions: revisiting an area
+    regenerates that area, while new areas accumulate alongside old ones.
+    """
+    cell_deg = max(radius_meters, 1.0) * 2 / 111_320  # ~meters per degree latitude
+    qlat = round(center_lat / cell_deg)
+    qlon = round(center_lon / cell_deg)
+    return f"zone_{qlat}x{qlon}"
+
+
 def cluster_records(records: List[RawRecord], radius_meters: float) -> List[List[RawRecord]]:
     """Simple greedy proximity clustering: walk the list, assign each record
     to the first existing cluster within radius of its centroid, else start
@@ -65,34 +80,56 @@ def cluster_records(records: List[RawRecord], radius_meters: float) -> List[List
     return clusters
 
 
-def render_map(zones: Dict[str, dict], image_size: tuple, output_path: str):
+def render_map(zones: Dict[str, dict], image_size: tuple, output_path: str,
+               route: List[tuple] = None):
     """
     Renders a simple top-down map: zone centroids plotted proportionally
-    to their real GPS spread, labeled with fantasy zone names. This is a
-    minimal renderer. Swap in a proper projection/tile system later if
-    the walked area gets large enough that flat scaling distorts things.
+    to their real GPS spread, labeled with fantasy zone names, with the
+    walked route drawn as a path underneath. Uses an equirectangular
+    projection (longitude scaled by cos(latitude)) with a uniform scale on
+    both axes so the layout matches real geography instead of stretching
+    to fill the canvas.
+
+    route: optional list of (lat, lon) points in time order.
     """
     if not zones:
         return
 
-    lats = [z["center_lat"] for z in zones.values()]
-    lons = [z["center_lon"] for z in zones.values()]
-    min_lat, max_lat = min(lats), max(lats)
-    min_lon, max_lon = min(lons), max(lons)
+    route = route or []
+    points = ([(z["center_lat"], z["center_lon"]) for z in zones.values()]
+              + [(lat, lon) for lat, lon in route])
+    lats = [p[0] for p in points]
+    mid_lat = (min(lats) + max(lats)) / 2
+    lon_scale = math.cos(math.radians(mid_lat))
 
-    # Avoid divide-by-zero for a single-point map
-    lat_range = max(max_lat - min_lat, 1e-6)
-    lon_range = max(max_lon - min_lon, 1e-6)
+    xs = [p[1] * lon_scale for p in points]
+    ys = lats
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
 
     width, height = image_size
     margin = 100
+    # One scale for both axes, whichever dimension is the binding one
+    scale = min((width - 2 * margin) / max(max_x - min_x, 1e-9),
+                (height - 2 * margin) / max(max_y - min_y, 1e-9))
+    # Center the drawn extent on the canvas
+    off_x = (width - (max_x - min_x) * scale) / 2
+    off_y = (height - (max_y - min_y) * scale) / 2
+
+    def project(lat, lon):
+        x = off_x + (lon * lon_scale - min_x) * scale
+        y = off_y + (max_y - lat) * scale
+        return (x, y)
+
     img = Image.new("RGB", (width, height), color=(20, 24, 20))
     draw = ImageDraw.Draw(img)
 
-    for zone_id, zone in zones.items():
-        x = margin + ((zone["center_lon"] - min_lon) / lon_range) * (width - 2 * margin)
-        y = margin + (1 - (zone["center_lat"] - min_lat) / lat_range) * (height - 2 * margin)
+    if len(route) >= 2:
+        draw.line([project(lat, lon) for lat, lon in route],
+                  fill=(90, 80, 55), width=3)
 
+    for zone_id, zone in zones.items():
+        x, y = project(zone["center_lat"], zone["center_lon"])
         draw.ellipse((x - 8, y - 8, x + 8, y + 8), fill=(180, 140, 60))
         draw.text((x + 12, y - 6), zone.get("name", zone_id), fill=(230, 220, 190))
 

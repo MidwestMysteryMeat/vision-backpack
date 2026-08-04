@@ -104,10 +104,16 @@ def run(config_path: str = "config.yaml"):
     print(f"[main] Field capture running. Auto-interval: {interval}s. Ctrl+C to stop.")
 
     last_capture_time = 0.0
+    last_flush_time = 0.0
+    button_was_down = False
     try:
         while True:
             now = time.monotonic()
-            button_pressed = HAS_GPIO and GPIO.input(button_pin) == GPIO.LOW
+            # Edge-triggered: fire once per press, not once per loop tick
+            # while the button is held down.
+            button_down = HAS_GPIO and GPIO.input(button_pin) == GPIO.LOW
+            button_pressed = button_down and not button_was_down
+            button_was_down = button_down
             due_for_auto_capture = (now - last_capture_time) >= interval
 
             if button_pressed or due_for_auto_capture:
@@ -142,7 +148,10 @@ def run(config_path: str = "config.yaml"):
 
             # Periodically try to flush any locally buffered records if the
             # drive has since been mounted (e.g. reconnected mid-hike).
-            queue.flush_buffer_to_drive()
+            # Throttled: no need to hit the mount point every loop tick.
+            if (now - last_flush_time) >= 10.0:
+                queue.flush_buffer_to_drive()
+                last_flush_time = now
 
             time.sleep(0.5)
 

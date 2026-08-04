@@ -42,12 +42,18 @@ class GPSLogger:
             except Exception:
                 continue
 
-            if line.startswith("$GPGGA") or line.startswith("$GNGGA"):
+            # GGA and RMC both carry a position; the NEO-6M interleaves
+            # them, so accepting either roughly halves time-to-fix here.
+            if line[:6] in ("$GPGGA", "$GNGGA", "$GPRMC", "$GNRMC"):
                 try:
                     msg = pynmea2.parse(line)
-                    if msg.latitude and msg.longitude:
+                    # Both sentence types flag fix validity; a void fix can
+                    # still carry stale coordinates, so check it explicitly.
+                    valid = (getattr(msg, "status", "A") == "A"
+                             and int(getattr(msg, "gps_qual", 1) or 0) > 0)
+                    if valid and msg.latitude and msg.longitude:
                         return (msg.latitude, msg.longitude)
-                except pynmea2.ParseError:
+                except (pynmea2.ParseError, ValueError):
                     continue
 
         return (None, None)
